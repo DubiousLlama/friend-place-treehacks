@@ -1,0 +1,37 @@
+{"location":"GameGraph.tsx:handleMouseEnter","message":"mouseEnter fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099431148,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handlePointerUp","message":"pointerUp fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099431159,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseLeave","message":"mouseLeave fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099431160,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter","message":"mouseEnter fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099431449,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter:timer","message":"setShowTooltip(true) called","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099431757,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099431758,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099431759,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099431768,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099431769,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:handlePointerUp","message":"pointerUp fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099433013,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseLeave","message":"mouseLeave fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099433014,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter","message":"mouseEnter fired","data":{"edge":"bottom","text":"Prefers staying home on a Friday"},"timestamp":1771099433406,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handlePointerUp","message":"pointerUp fired","data":{"edge":"bottom","text":"Prefers staying home on a Friday"},"timestamp":1771099433463,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseLeave","message":"mouseLeave fired","data":{"edge":"bottom","text":"Prefers staying home on a Friday"},"timestamp":1771099433463,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter","message":"mouseEnter fired","data":{"edge":"bottom","text":"Prefers staying home on a Friday"},"timestamp":1771099433609,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter:timer","message":"setShowTooltip(true) called","data":{"edge":"bottom","text":"Prefers staying home on a Friday"},"timestamp":1771099433915,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"bottom","text":"Prefers staying home on a Friday","showTooltip":true},"timestamp":1771099433916,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"bottom","text":"Prefers staying home on a Friday","showTooltip":true},"timestamp":1771099433916,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"bottom","text":"Prefers staying home on a Friday","showTooltip":true},"timestamp":1771099433923,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"bottom","text":"Prefers staying home on a Friday","showTooltip":true},"timestamp":1771099433923,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:handlePointerUp","message":"pointerUp fired","data":{"edge":"bottom","text":"Prefers staying home on a Friday"},"timestamp":1771099434495,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseLeave","message":"mouseLeave fired","data":{"edge":"bottom","text":"Prefers staying home on a Friday"},"timestamp":1771099434496,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter","message":"mouseEnter fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099434515,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handlePointerUp","message":"pointerUp fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099434521,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseLeave","message":"mouseLeave fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099434522,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handlePointerDown","message":"pointerDown fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099436355,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handlePointerDown:timer","message":"setShowTooltip(true) via long-press","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099436866,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099436868,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099436868,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:handlePointerUp","message":"pointerUp fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099437510,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handlePointerUp","message":"pointerUp fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099437515,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter","message":"mouseEnter fired","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099437518,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:handleMouseEnter:timer","message":"setShowTooltip(true) called","data":{"edge":"right","text":"Pineapple on pizza is a crime"},"timestamp":1771099437825,"hypothesisId":"D"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099437827,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099437826,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099459370,"hypothesisId":"A"}
+{"location":"GameGraph.tsx:tooltip-render","message":"tooltip render block entered","data":{"edge":"right","text":"Pineapple on pizza is a crime","showTooltip":true},"timestamp":1771099459371,"hypothesisId":"A"}
