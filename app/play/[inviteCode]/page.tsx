@@ -126,7 +126,7 @@ export default function PlayPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-zinc-500 dark:text-zinc-400">Loading...</p>
+        <p className="text-[var(--secondary)]">Loading...</p>
       </div>
     );
   }
@@ -134,15 +134,15 @@ export default function PlayPage() {
   if (!game) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-xl font-semibold text-[var(--black)]">
           Game not found
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400 text-center max-w-sm">
+        <p className="text-[var(--secondary)] text-center max-w-sm">
           This invite link may be wrong or the game may have been deleted.
         </p>
         <a
           href="/"
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 font-medium"
+          className="rounded-lg bg-[var(--splash)] text-[var(--white)] px-4 py-2 font-medium"
         >
           Back home
         </a>
@@ -171,7 +171,7 @@ export default function PlayPage() {
   if (game.phase === "results") {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-[var(--secondary)]">
           Results — scoreboard and placement reveal. (Coming in Phase 5.)
         </p>
       </div>
@@ -182,10 +182,10 @@ export default function PlayPage() {
   return (
     <div className="min-h-screen py-10 px-4">
       <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+        <h1 className="text-2xl font-bold text-[var(--black)]">
           Friend Place
         </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+        <p className="text-sm text-[var(--secondary)] mt-1">
           {game.axis_x_label_low} vs. {game.axis_x_label_high} &nbsp;|&nbsp;{" "}
           {game.axis_y_label_low} vs. {game.axis_y_label_high}
         </p>

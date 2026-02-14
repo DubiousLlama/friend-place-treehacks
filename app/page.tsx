@@ -161,13 +161,13 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-4 py-12 font-sans dark:bg-zinc-950">
+    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 font-sans">
       <main className="w-full max-w-lg flex flex-col items-center gap-8">
         <div className="flex flex-col gap-3 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--black)]">
             Friend Place
           </h1>
-          <p className="text-zinc-600 dark:text-zinc-400">
+          <p className="text-[var(--secondary)]">
             Place yourself on the chart, then guess where your friends belong.
             Share the link and see who knows each other best.
           </p>
@@ -175,15 +175,15 @@ export default function Home() {
 
         <form
           onSubmit={handleCreateGame}
-          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6 flex flex-col gap-6"
+          className="w-full rounded-xl border border-[var(--border)] bg-[var(--white)] p-6 flex flex-col gap-6"
         >
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <h2 className="text-lg font-semibold text-[var(--black)]">
             Create a game
           </h2>
 
           {/* Your name */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="text-sm font-medium text-[var(--black)]">
               Your name
             </label>
             <input
@@ -192,18 +192,18 @@ export default function Home() {
               onChange={(e) => setCreatorName(e.target.value)}
               placeholder="e.g. Sam"
               maxLength={50}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
             />
           </div>
 
           {/* Axis labels */}
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="text-sm text-[var(--secondary)]">
               Set the two axes of the chart. Each axis has two ends.
             </p>
 
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              <legend className="text-sm font-medium text-[var(--black)] mb-1">
                 Horizontal
               </legend>
               <div className="flex gap-2">
@@ -213,7 +213,7 @@ export default function Home() {
                   onChange={(e) => setXLow(e.target.value)}
                   placeholder="Left (e.g. Introvert)"
                   maxLength={40}
-                  className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
                 />
                 <input
                   type="text"
@@ -221,13 +221,13 @@ export default function Home() {
                   onChange={(e) => setXHigh(e.target.value)}
                   placeholder="Right (e.g. Extrovert)"
                   maxLength={40}
-                  className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
                 />
               </div>
             </fieldset>
 
             <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+              <legend className="text-sm font-medium text-[var(--black)] mb-1">
                 Vertical
               </legend>
               <div className="flex gap-2">
@@ -237,7 +237,7 @@ export default function Home() {
                   onChange={(e) => setYLow(e.target.value)}
                   placeholder="Bottom (e.g. Night owl)"
                   maxLength={40}
-                  className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
                 />
                 <input
                   type="text"
@@ -245,7 +245,7 @@ export default function Home() {
                   onChange={(e) => setYHigh(e.target.value)}
                   placeholder="Top (e.g. Early bird)"
                   maxLength={40}
-                  className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
                 />
               </div>
             </fieldset>
@@ -253,10 +253,10 @@ export default function Home() {
 
           {/* Player names */}
           <div className="flex flex-col gap-3">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="text-sm font-medium text-[var(--black)]">
               Friends in this game
             </label>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-[var(--secondary)]">
               Add the names of people who will play. They&apos;ll claim their
               name when they join via the link.
             </p>
@@ -268,13 +268,13 @@ export default function Home() {
                   onChange={(e) => updatePlayerName(i, e.target.value)}
                   placeholder={`Friend ${i + 1}`}
                   maxLength={50}
-                  className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
                 />
                 {playerNames.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removePlayerName(i)}
-                    className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2 text-sm text-zinc-500 hover:text-red-500 hover:border-red-300 transition-colors"
+                    className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--secondary)] hover:text-red-500 hover:border-red-300 transition-colors"
                     aria-label="Remove"
                   >
                     &times;
@@ -285,7 +285,7 @@ export default function Home() {
             <button
               type="button"
               onClick={addPlayerNameField}
-              className="self-start rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 transition-colors"
+              className="self-start rounded-lg border border-dashed border-[var(--border)] px-3 py-1.5 text-sm text-[var(--secondary)] hover:border-[var(--splash)] hover:text-[var(--splash)] transition-colors"
             >
               + Add another friend
             </button>
@@ -293,14 +293,14 @@ export default function Home() {
 
           {/* End time */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="text-sm font-medium text-[var(--black)]">
               Game ends at
             </label>
             <input
               type="datetime-local"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)]"
             />
           </div>
 
@@ -310,9 +310,9 @@ export default function Home() {
               type="checkbox"
               checked={endEarlyWhenComplete}
               onChange={(e) => setEndEarlyWhenComplete(e.target.checked)}
-              className="size-4 rounded border-zinc-300 dark:border-zinc-600 accent-emerald-600"
+              className="size-4 rounded border-[var(--border)] accent-[var(--splash)]"
             />
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="text-sm text-[var(--secondary)]">
               End early once all names are claimed and everyone has placed
             </span>
           </label>
@@ -320,13 +320,13 @@ export default function Home() {
           <button
             type="submit"
             disabled={creating}
-            className="rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-3 font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity"
+            className="rounded-xl bg-[var(--splash)] text-[var(--white)] py-3 font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity"
           >
             {creating ? "Creating..." : "Create game"}
           </button>
 
           {error && (
-            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+            <p className="text-sm text-red-600" role="alert">
               {error}
             </p>
           )}
