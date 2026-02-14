@@ -53,7 +53,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     self_y: null,
     has_submitted: false,
     score: null,
-    claimed_at: new Date().toISOString(),
+    claimed_at: null,
   },
   {
     id: "gp-4",

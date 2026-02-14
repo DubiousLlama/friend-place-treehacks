@@ -48,7 +48,7 @@ export type Database = {
           phase: "placing" | "results";
           created_by: string;
           created_at: string;
-          submissions_lock_at: string;
+          submissions_lock_at: string | null;
           end_early_when_complete: boolean;
         };
         Insert: {
@@ -61,7 +61,7 @@ export type Database = {
           phase?: "placing" | "results";
           created_by: string;
           created_at?: string;
-          submissions_lock_at: string;
+          submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
         };
         Update: {
@@ -74,7 +74,7 @@ export type Database = {
           phase?: "placing" | "results";
           created_by?: string;
           created_at?: string;
-          submissions_lock_at?: string;
+          submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
         };
         Relationships: [
@@ -84,7 +84,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "players";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       game_players: {
@@ -135,7 +135,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "players";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       guesses: {
@@ -184,7 +184,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "game_players";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
     };

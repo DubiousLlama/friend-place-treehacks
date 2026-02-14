@@ -17,8 +17,12 @@ interface PlacingPhaseProps {
   game: Game;
   /** The game_players.id of the current user's claimed slot */
   currentGamePlayerId: string;
-  /** All other name slots in the game (claimed and unclaimed) */
+  /** ALL other players in the game (including previously guessed ones) */
   otherPlayers: GamePlayer[];
+  /** Pre-existing self position (when re-entering after a previous submit) */
+  initialSelfPosition?: Position | null;
+  /** Pre-existing guess positions keyed by game_player id (from previous submits) */
+  initialOtherPositions?: Map<string, Position>;
   onSubmit: (
     selfPosition: Position,
     guesses: { targetGamePlayerId: string; position: Position }[]
@@ -31,6 +35,8 @@ export function PlacingPhase({
   game,
   currentGamePlayerId,
   otherPlayers,
+  initialSelfPosition = null,
+  initialOtherPositions,
   onSubmit,
 }: PlacingPhaseProps) {
   const graphRef = useRef<HTMLDivElement | null>(null);
@@ -76,11 +82,24 @@ export function PlacingPhase({
   const isZoomed = graphScale > 1.05;
 
   // ---- State ----
-  const [step, setStep] = useState<Step>("self");
-  const [selfPosition, setSelfPosition] = useState<Position | null>(null);
+  // If re-entering with an existing self position, start on step "others"
+  const [step, setStep] = useState<Step>(
+    initialSelfPosition ? "others" : "self"
+  );
+  const [selfPosition, setSelfPosition] = useState<Position | null>(
+    initialSelfPosition
+  );
   const [selfVersion, setSelfVersion] = useState(0);
+
+  // Initialize other positions: pre-populate from DB for previously guessed friends
   const [otherPositions, setOtherPositions] = useState<Map<string, Position | null>>(
-    () => new Map(otherPlayers.map((p) => [p.id, null]))
+    () => {
+      const map = new Map<string, Position | null>();
+      for (const p of otherPlayers) {
+        map.set(p.id, initialOtherPositions?.get(p.id) ?? null);
+      }
+      return map;
+    }
   );
   const [otherVersions, setOtherVersions] = useState<Map<string, number>>(
     () => new Map(otherPlayers.map((p) => [p.id, 0]))
@@ -96,12 +115,14 @@ export function PlacingPhase({
     [otherPlayers, otherPositions]
   );
 
-  const allOthersPlaced = useMemo(
-    () => namePlacements.every((n) => n.position !== null),
+  const placedCount = useMemo(
+    () => namePlacements.filter((n) => n.position !== null).length,
     [namePlacements]
   );
+  const totalCount = namePlacements.length;
 
-  const canSubmit = step === "others" && selfPosition !== null && allOthersPlaced;
+  // Can submit as long as self is placed (partial friend placement is OK)
+  const canSubmit = step === "others" && selfPosition !== null;
 
   // ---- Handlers ----
   const handleSelfPlace = useCallback((pos: Position) => {
@@ -193,9 +214,18 @@ export function PlacingPhase({
             >
               {step === "self"
                 ? "Drag yourself onto the graph"
-                : "Now place everyone else!"}
+                : totalCount === 0
+                  ? "No friends to place yet"
+                  : "Now place everyone else!"}
             </motion.p>
           </AnimatePresence>
+
+          {/* Progress — shown during others step */}
+          {step === "others" && totalCount > 0 && (
+            <p className="text-center text-sm text-secondary mt-1">
+              {placedCount} of {totalCount} placed
+            </p>
+          )}
         </div>
 
         {/* Graph area — padding shrinks when zoomed to maximize space */}
@@ -242,9 +272,9 @@ export function PlacingPhase({
           </GameGraph>
         </div>
 
-        {/* Token tray — only in others step */}
+        {/* Token tray — only in others step when there are unplaced friends */}
         <AnimatePresence>
-          {step === "others" && (
+          {step === "others" && totalCount > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -290,7 +320,7 @@ export function PlacingPhase({
           )}
         </AnimatePresence>
 
-        {/* Submit button */}
+        {/* Submit button — enabled as long as self is placed */}
         <div className="px-4 pb-4">
           <AnimatePresence>
             {step === "others" && (
@@ -312,9 +342,11 @@ export function PlacingPhase({
                   }
                 `}
               >
-                {canSubmit
-                  ? "Submit Placements"
-                  : `Place ${namePlacements.filter((n) => n.position === null).length} more name${namePlacements.filter((n) => n.position === null).length !== 1 ? "s" : ""}`}
+                {placedCount === totalCount && totalCount > 0
+                  ? `Submit all ${totalCount} placement${totalCount !== 1 ? "s" : ""}`
+                  : placedCount > 0
+                    ? `Submit ${placedCount} of ${totalCount} placed`
+                    : "Place friends, then submit"}
               </motion.button>
             )}
           </AnimatePresence>

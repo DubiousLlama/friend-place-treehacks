@@ -1,5 +1,5 @@
 -- =============================================
--- Friend Place: Initial Schema
+-- Friend Place: Initial Schema (v2 — name-slot pattern)
 -- =============================================
 
 -- Enum for game phases (no lobby — games start in "placing" immediately)
@@ -23,13 +23,15 @@ CREATE TABLE games (
   phase                     game_phase NOT NULL DEFAULT 'placing',
   created_by                uuid NOT NULL REFERENCES players(id),
   created_at                timestamptz NOT NULL DEFAULT now(),
-  submissions_lock_at       timestamptz NOT NULL,
+  submissions_lock_at       timestamptz,
   end_early_when_complete   boolean NOT NULL DEFAULT true
 );
 
 CREATE INDEX idx_games_invite_code ON games(invite_code);
 
--- Game-player join table (supports pre-created "name slots" with nullable player_id)
+-- Game-player join table (name-slot pattern)
+-- player_id is NULL for unclaimed name slots pre-populated by the creator.
+-- Once a real user claims the slot, player_id is set to their auth.uid().
 CREATE TABLE game_players (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   game_id         uuid NOT NULL REFERENCES games(id) ON DELETE CASCADE,
@@ -76,7 +78,7 @@ CREATE POLICY "Users can update own player"
   ON players FOR UPDATE TO authenticated
   USING (id = auth.uid());
 
--- games: anyone authenticated can read; authenticated can create
+-- games: anyone authenticated can read; authenticated can create (must be creator)
 CREATE POLICY "Anyone can read games"
   ON games FOR SELECT TO authenticated USING (true);
 
