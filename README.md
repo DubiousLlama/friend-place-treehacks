@@ -1,4 +1,16 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Friend Place
+
+A daily social game where players place themselves and friends on a 2D graph with custom axes (e.g. "Gimli vs Legolas", "Muffin vs Pancake"). Built with Next.js 16, React 19, Tailwind CSS 4, Framer Motion, and Supabase (Postgres, Auth, Realtime).
+
+## Current features
+
+- **Create a game** — Landing page: axis labels, player names, end time. Creator gets a shareable invite link.
+- **Join & claim a name** — Open the link, pick your name from the list (or add yourself). You can **edit** your display name or **switch** to a different name later.
+- **Place on the graph** — Drag yourself onto the 2D graph, then drag each friend onto the graph. Partial submission allowed; you can return to place more friends later.
+- **Dashboard** — After submitting: see progress (X of N placed), add players, copy invite link, view placement counts for everyone. **Host** can **end game** at any time.
+- **Realtime** — Player list and game phase stay in sync across clients.
+
+See `docs/components.md` for component architecture and `.cursor/plans/friend_place_game_plan_fd997aac.plan.md` for the full build plan and phase status.
 
 ## Getting Started
 

@@ -11,6 +11,14 @@ interface GameInfoPanelProps {
   inviteCode: string;
   /** How many friends the current user has guessed */
   guessedCount: number;
+  /** Called when user wants to release their claimed name */
+  onUnclaim: () => void;
+  /** Called when user wants to change their display name (same identity) */
+  onEditName: (newName: string) => void | Promise<void>;
+  /** Whether the current user is the game host (creator) */
+  isHost: boolean;
+  /** Called when the host ends the game */
+  onEndGame: () => void;
 }
 
 /**
@@ -23,9 +31,17 @@ export function GameInfoPanel({
   mySlot,
   inviteCode,
   guessedCount,
+  onUnclaim,
+  onEditName,
+  isHost,
+  onEndGame,
 }: GameInfoPanelProps) {
   const [open, setOpen] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
+  const [editNameError, setEditNameError] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   const shareUrl =
     typeof window !== "undefined"
@@ -49,6 +65,21 @@ export function GameInfoPanel({
     } catch {
       /* user can copy manually */
     }
+  };
+
+  const handleSaveEditName = async () => {
+    const name = editNameValue.trim();
+    if (!name) return;
+    setSavingName(true);
+    setEditNameError("");
+    try {
+      await onEditName(name);
+      setEditingName(false);
+      setEditNameValue("");
+    } catch (err) {
+      setEditNameError(err instanceof Error ? err.message : "Failed to update name.");
+    }
+    setSavingName(false);
   };
 
   return (
@@ -142,12 +173,20 @@ export function GameInfoPanel({
                         statusColor = "text-secondary";
                       }
                     } else {
-                      statusText = hasPlaced
-                        ? gp.has_submitted ? "Submitted" : "Placed"
-                        : "Joined";
-                      statusColor = hasPlaced
-                        ? "text-splash"
-                        : gp.has_submitted ? "text-accent" : "text-secondary";
+                      const theirTotal = gamePlayers.filter((g) => g.id !== gp.id).length;
+                      const theirCount = gp.guesses_count ?? 0;
+                      if (theirCount > 0) {
+                        statusText = `${theirCount}/${theirTotal}`;
+                        statusColor = theirCount === theirTotal
+                          ? "text-splash"
+                          : "text-accent";
+                      } else if (hasPlaced) {
+                        statusText = "Self placed";
+                        statusColor = "text-accent";
+                      } else {
+                        statusText = "Joined";
+                        statusColor = "text-secondary";
+                      }
                     }
 
                     return (
@@ -155,14 +194,82 @@ export function GameInfoPanel({
                         key={gp.id}
                         className="flex items-center justify-between text-xs"
                       >
-                        <span className="flex items-center gap-1.5 text-foreground">
+                        <span className="flex items-center gap-1.5 text-foreground min-w-0">
                           <span
-                            className={`size-1.5 rounded-full ${hasPlaced ? "bg-splash" : "bg-accent"}`}
+                            className={`size-1.5 rounded-full shrink-0 ${hasPlaced ? "bg-splash" : "bg-accent"}`}
                             aria-hidden
                           />
-                          {gp.display_name}
-                          {isMe && (
-                            <span className="text-secondary">(you)</span>
+                          {isMe && editingName ? (
+                            <span className="flex flex-wrap items-center gap-1 min-w-0">
+                              <input
+                                type="text"
+                                value={editNameValue}
+                                onChange={(e) => {
+                                  setEditNameValue(e.target.value);
+                                  setEditNameError("");
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveEditName();
+                                  }
+                                  if (e.key === "Escape") {
+                                    setEditingName(false);
+                                    setEditNameValue("");
+                                    setEditNameError("");
+                                  }
+                                }}
+                                placeholder="Name"
+                                maxLength={50}
+                                className="rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 text-xs w-24 min-w-0"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={handleSaveEditName}
+                                disabled={savingName || !editNameValue.trim()}
+                                className="text-xs text-splash hover:underline disabled:opacity-50 shrink-0"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingName(false);
+                                  setEditNameValue("");
+                                  setEditNameError("");
+                                }}
+                                className="text-xs text-secondary hover:underline shrink-0"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <>
+                              {gp.display_name}
+                              {isMe && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditNameValue(mySlot.display_name);
+                                      setEditingName(true);
+                                      setEditNameError("");
+                                    }}
+                                    className="text-secondary underline hover:text-splash transition-colors"
+                                  >
+                                    edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={onUnclaim}
+                                    className="text-secondary underline hover:text-splash transition-colors"
+                                  >
+                                    switch
+                                  </button>
+                                </>
+                              )}
+                            </>
                           )}
                         </span>
                         <span className={statusColor}>
@@ -187,6 +294,9 @@ export function GameInfoPanel({
                     </li>
                   ))}
                 </ul>
+                {editNameError && (
+                  <p className="text-[10px] text-red-500 mt-1">{editNameError}</p>
+                )}
               </div>
 
               {/* Deadline */}
@@ -210,6 +320,21 @@ export function GameInfoPanel({
                     </p>
                   )}
                 </div>
+              )}
+
+              {/* Host: End Game */}
+              {isHost && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("End the game and reveal results? This can't be undone.")) {
+                      onEndGame();
+                    }
+                  }}
+                  className="w-full rounded-lg border border-red-300 text-red-600 py-1.5 text-xs font-semibold hover:bg-red-50 transition-colors"
+                >
+                  End game &amp; reveal results
+                </button>
               )}
             </div>
           </motion.div>
