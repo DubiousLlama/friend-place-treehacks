@@ -4,15 +4,10 @@ import React, { useCallback, useRef } from "react";
 import { motion, useMotionValue, type PanInfo } from "framer-motion";
 import type { Position } from "@/lib/game-types";
 import type { Anchor } from "@/lib/label-placement";
+import type { GraphSizeConfig } from "@/lib/sizes";
+import { DESKTOP_SIZES } from "@/lib/sizes";
 import { pixelToNormalized, normalizedToPercent } from "@/lib/graph-utils";
 import { springTransition, tapScale, hoverLift } from "@/lib/motion";
-
-/** Size of the placement dot in px */
-const DOT_SIZE = 12;
-/** Size of the invisible hit area around the dot (must be > DOT_SIZE to prevent cursor oscillation) */
-const HIT_SIZE = 28;
-/** Size of tray pill height in px */
-const PILL_H = 36;
 
 interface PlayerTokenProps {
   /** Unique identifier for layoutId animations */
@@ -33,33 +28,47 @@ interface PlayerTokenProps {
   disabled?: boolean;
   /** Label anchor direction computed by collision avoidance (placed tokens only) */
   labelAnchor?: Anchor;
+  /** Responsive size config — defaults to DESKTOP_SIZES */
+  sizes?: GraphSizeConfig;
 }
 
-// ---- Label offset styles keyed by anchor direction ----
-// Offset from the dot center to the label. The label is positioned via
-// absolute CSS relative to the drag-layer div which is sized to the dot.
-const LABEL_OFFSET = 10; // px from dot edge
+// ---------------------------------------------------------------------------
+// Label offset styles keyed by anchor direction
+// ---------------------------------------------------------------------------
 
-function labelStyle(anchor: Anchor): React.CSSProperties {
+function labelStyle(anchor: Anchor, hitSize: number, labelOffset: number): React.CSSProperties {
   const base: React.CSSProperties = {
     position: "absolute",
     whiteSpace: "nowrap",
     pointerEvents: "none",
   };
-  // Offsets are from the center of the HIT_SIZE container so the label
-  // appears at the same distance from the dot regardless of hit area size.
-  const c = HIT_SIZE / 2;
+  const c = hitSize / 2;
   switch (anchor) {
+    // --- right side ---
     case "ne":
-      return { ...base, left: c + LABEL_OFFSET, bottom: c };
-    case "nw":
-      return { ...base, right: c + LABEL_OFFSET, bottom: c };
+      return { ...base, left: c + labelOffset, bottom: c };
+    case "e":
+      return { ...base, left: c + labelOffset, top: "50%", transform: "translateY(-50%)" };
     case "se":
-      return { ...base, left: c + LABEL_OFFSET, top: c };
+      return { ...base, left: c + labelOffset, top: c };
+    // --- centred horizontally ---
+    case "n":
+      return { ...base, left: "50%", transform: "translateX(-50%)", bottom: c + labelOffset };
+    case "s":
+      return { ...base, left: "50%", transform: "translateX(-50%)", top: c + labelOffset };
+    // --- left side ---
+    case "nw":
+      return { ...base, right: c + labelOffset, bottom: c };
     case "sw":
-      return { ...base, right: c + LABEL_OFFSET, top: c };
+      return { ...base, right: c + labelOffset, top: c };
+    case "w":
+      return { ...base, right: c + labelOffset, top: "50%", transform: "translateY(-50%)" };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function PlayerToken({
   id,
@@ -71,18 +80,17 @@ export function PlayerToken({
   graphRef,
   disabled = false,
   labelAnchor = "ne",
+  sizes = DESKTOP_SIZES,
 }: PlayerTokenProps) {
   const tokenRef = useRef<HTMLDivElement>(null);
 
   const isSelf = variant === "self";
   const colorClass = isSelf ? "bg-splash" : "bg-accent";
 
+  // Destructure pixel sizes from config
+  const { dotSize, hitSize, labelOffset, labelFontSize, labelPadX, labelPadY, pillHeight, pillFontSize, pillPadX } = sizes;
+
   // --- Scale compensation ---
-  // When the graph is zoomed (parent has CSS scale(S)), Framer Motion's drag
-  // applies translate(offset) in local coordinates which gets amplified to
-  // S*offset on screen. We counteract this with a compensation wrapper that
-  // offsets by -offset*(S-1)/S, resulting in a net visual movement of exactly
-  // `offset` screen pixels — perfect 1:1 cursor tracking.
   const compensateX = useMotionValue(0);
   const compensateY = useMotionValue(0);
   const scaleRef = useRef(1);
@@ -108,8 +116,6 @@ export function PlayerToken({
 
   const handleDragEnd = useCallback(
     (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-      // Do NOT reset compensateX/Y here. The component remounts (via version
-      // counter key) which creates fresh motion values at 0.
       if (disabled) return;
 
       const graphEl = graphRef.current;
@@ -176,11 +182,11 @@ export function PlayerToken({
             ${disabled ? "opacity-70 cursor-default" : "cursor-grab active:cursor-grabbing"}
           `}
           style={{
-            height: PILL_H,
-            paddingLeft: 14,
-            paddingRight: 14,
-            fontSize: 12,
-            minHeight: PILL_H,
+            height: pillHeight,
+            paddingLeft: pillPadX,
+            paddingRight: pillPadX,
+            fontSize: pillFontSize,
+            minHeight: pillHeight,
           }}
         >
           <span className="truncate leading-tight" style={{ maxWidth: 80 }}>
@@ -195,14 +201,12 @@ export function PlayerToken({
   const wrapperStyle: React.CSSProperties = {
     position: "absolute",
     ...normalizedToPercent(position),
-    // Center the hit area on the percentage point
-    marginLeft: -HIT_SIZE / 2,
-    marginTop: -HIT_SIZE / 2,
+    marginLeft: -hitSize / 2,
+    marginTop: -hitSize / 2,
   };
 
   return (
     <motion.div
-      // Layer 1: positioning + drag compensation
       data-token="true"
       style={{
         ...wrapperStyle,
@@ -211,59 +215,57 @@ export function PlayerToken({
         zIndex: 10,
       }}
     >
-      {/* Layer 2: inverse scale — keeps marker constant screen size */}
-      <div
+      <motion.div
+        ref={tokenRef}
+        drag={!disabled}
+        dragMomentum={false}
+        dragElastic={0}
+        onDragStart={handleDragStart}
+        onDrag={handleDrag}
+        onDragEnd={handleDragEnd}
+        whileDrag={{
+          boxShadow: isSelf
+            ? "0 0 0 6px rgba(249,135,78,0.4), 0 4px 16px rgba(0,0,0,0.2)"
+            : "0 0 0 6px rgba(98,126,248,0.4), 0 4px 16px rgba(0,0,0,0.2)",
+          zIndex: 50,
+        }}
+        whileTap={disabled ? undefined : tapScale}
+        transition={springTransition}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-label={`${isSelf ? "Your" : `${label}'s`} token — placed on graph`}
+        className="cursor-default"
         style={{
-          transform: "scale(calc(1 / var(--graph-scale, 1)))",
-          transformOrigin: "center",
+          position: "relative",
+          width: hitSize,
+          height: hitSize,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
         }}
       >
-        {/* Layer 3: drag behavior + visual content */}
-        <motion.div
-          ref={tokenRef}
-          drag={!disabled}
-          dragMomentum={false}
-          dragElastic={0}
-          onDragStart={handleDragStart}
-          onDrag={handleDrag}
-          onDragEnd={handleDragEnd}
-          whileDrag={{
-            boxShadow: isSelf
-              ? "0 0 0 6px rgba(249,135,78,0.4), 0 4px 16px rgba(0,0,0,0.2)"
-              : "0 0 0 6px rgba(98,126,248,0.4), 0 4px 16px rgba(0,0,0,0.2)",
-            zIndex: 50,
-          }}
-          whileTap={disabled ? undefined : tapScale}
-          transition={springTransition}
-          role="button"
-          tabIndex={disabled ? -1 : 0}
-          aria-label={`${isSelf ? "Your" : `${label}'s`} token — placed on graph`}
-          className="cursor-default"
+        {/* Dot */}
+        <div
+          className={`rounded-full ${colorClass} shadow-sm`}
+          style={{ width: dotSize, height: dotSize }}
+        />
+
+        {/* External label */}
+        <span
+          className="font-body font-medium text-foreground bg-white/80 rounded select-none leading-tight"
           style={{
-            position: "relative",
-            width: HIT_SIZE,
-            height: HIT_SIZE,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
+            fontSize: labelFontSize,
+            paddingLeft: labelPadX,
+            paddingRight: labelPadX,
+            paddingTop: labelPadY,
+            paddingBottom: labelPadY,
+            ...labelStyle(labelAnchor, hitSize, labelOffset),
           }}
         >
-          {/* Dot */}
-          <div
-            className={`rounded-full ${colorClass} shadow-sm`}
-            style={{ width: DOT_SIZE, height: DOT_SIZE }}
-          />
-
-          {/* External label */}
-          <span
-            className="font-body text-[13px] font-medium text-foreground bg-white/80 rounded px-1.5 py-0.5 select-none leading-tight"
-            style={labelStyle(labelAnchor)}
-          >
-            {label}
-          </span>
-        </motion.div>
-      </div>
+          {label}
+        </span>
+      </motion.div>
     </motion.div>
   );
 }

@@ -3,6 +3,8 @@
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import { useGesture } from "@use-gesture/react";
 import { motion, AnimatePresence } from "framer-motion";
+import type { GraphSizeConfig } from "@/lib/sizes";
+import { DESKTOP_SIZES } from "@/lib/sizes";
 
 export interface TransformState {
   scale: number;
@@ -20,6 +22,8 @@ interface GameGraphProps {
   graphRef: React.RefObject<HTMLDivElement | null>;
   /** Exposes current transform state for coordinate conversion */
   onTransformChange?: (t: TransformState) => void;
+  /** Responsive size config — defaults to DESKTOP_SIZES */
+  sizes?: GraphSizeConfig;
 }
 
 const MIN_SCALE = 1;
@@ -52,9 +56,13 @@ interface AxisLabelProps {
   text: string;
   /** Which edge of the graph the label is on */
   edge: "top" | "bottom" | "left" | "right";
+  /** Axis label font size (px) */
+  fontSize: number;
+  /** Tooltip font size (px) */
+  tooltipFontSize: number;
 }
 
-function AxisLabel({ text, edge }: AxisLabelProps) {
+function AxisLabel({ text, edge, fontSize, tooltipFontSize }: AxisLabelProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -116,18 +124,19 @@ function AxisLabel({ text, edge }: AxisLabelProps) {
     >
       <span
         className={`
-          font-display text-[10px] font-semibold text-secondary select-none truncate
+          font-display font-semibold text-secondary select-none truncate
           ${isVertical ? "max-h-full" : "max-w-full"}
         `}
-        style={
-          isVertical
+        style={{
+          fontSize,
+          ...(isVertical
             ? {
-                writingMode: "vertical-rl",
-                textOrientation: "mixed",
+                writingMode: "vertical-rl" as const,
+                textOrientation: "mixed" as const,
                 transform: edge === "left" ? "rotate(180deg)" : undefined,
               }
-            : undefined
-        }
+            : undefined),
+        }}
       >
         {text}
       </span>
@@ -140,7 +149,8 @@ function AxisLabel({ text, edge }: AxisLabelProps) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute z-50 bg-white rounded-lg shadow-lg px-3 py-1.5 font-body text-sm text-foreground whitespace-nowrap pointer-events-none"
+            className="absolute z-50 bg-white rounded-lg shadow-lg px-3 py-1.5 font-body text-foreground whitespace-nowrap pointer-events-none"
+            style={{ fontSize: tooltipFontSize }}
             style={tooltipPosition}
           >
             {text}
@@ -163,7 +173,9 @@ export function GameGraph({
   children,
   graphRef,
   onTransformChange,
+  sizes = DESKTOP_SIZES,
 }: GameGraphProps) {
+  const { axisLabelFontSize, axisLabelTrack, axisTooltipFontSize } = sizes;
   const outerRef = useRef<HTMLDivElement>(null);
   const isDraggingTokenRef = useRef(false);
   const [transform, setTransform] = useState<TransformState>({
@@ -237,8 +249,8 @@ export function GameGraph({
       className="w-full max-w-[min(90vw,500px)] mx-auto"
       style={{
         display: "grid",
-        gridTemplateColumns: "24px 1fr 24px",
-        gridTemplateRows: "20px 1fr 20px",
+        gridTemplateColumns: `${axisLabelTrack}px 1fr ${axisLabelTrack}px`,
+        gridTemplateRows: `${axisLabelTrack - 4}px 1fr ${axisLabelTrack - 4}px`,
         gap: 2,
       }}
       role="img"
@@ -246,12 +258,12 @@ export function GameGraph({
     >
       {/* Y-axis high label (top) */}
       <div className="col-start-2 row-start-1 flex items-end justify-center px-1">
-        <AxisLabel text={axisYHigh} edge="top" />
+        <AxisLabel text={axisYHigh} edge="top" fontSize={axisLabelFontSize} tooltipFontSize={axisTooltipFontSize} />
       </div>
 
       {/* X-axis low label (left) */}
       <div className="col-start-1 row-start-2 flex items-center justify-center py-1">
-        <AxisLabel text={axisXLow} edge="left" />
+        <AxisLabel text={axisXLow} edge="left" fontSize={axisLabelFontSize} tooltipFontSize={axisTooltipFontSize} />
       </div>
 
       {/* Graph viewport (center) */}
@@ -261,13 +273,18 @@ export function GameGraph({
         style={{ touchAction: "none" }}
         onDoubleClick={handleDoubleClick}
       >
-        {/* Transform layer — pan/zoom applied here, everything moves together */}
+        {/* Transform layer — pan/zoom applied here, everything moves together.
+             Zoom uses physical width/height instead of CSS scale() so the
+             browser re-renders at full resolution (no blur on zoom). */}
         <div
           ref={graphRef}
-          className="absolute inset-0 origin-center"
+          className="absolute"
           style={{
-            transform: `translate(${transform.panX}px, ${transform.panY}px) scale(${transform.scale})`,
-            willChange: "transform",
+            width: `${transform.scale * 100}%`,
+            height: `${transform.scale * 100}%`,
+            left: `${-(transform.scale - 1) * 50}%`,
+            top: `${-(transform.scale - 1) * 50}%`,
+            transform: `translate(${transform.panX}px, ${transform.panY}px)`,
             "--graph-scale": String(transform.scale),
           } as React.CSSProperties}
         >
@@ -279,12 +296,14 @@ export function GameGraph({
             <div className="bg-splash/3" />
           </div>
 
-          {/* Subtle dot grid pattern */}
+          {/* Subtle dot grid pattern — sizes scale with zoom so dot density
+               stays constant (matching the old CSS-scale visual) */}
           <div
             className="absolute inset-0 pointer-events-none opacity-[0.08]"
             style={{
-              backgroundImage: "radial-gradient(circle, #66666e 0.5px, transparent 0.5px)",
-              backgroundSize: "20px 20px",
+              backgroundImage: `radial-gradient(circle, #66666e ${0.5 * transform.scale}px, transparent ${0.5 * transform.scale}px)`,
+              backgroundSize: `${20 * transform.scale}px ${20 * transform.scale}px`,
+              backgroundPosition: "center center",
             }}
           />
 
@@ -309,12 +328,12 @@ export function GameGraph({
 
       {/* X-axis high label (right) */}
       <div className="col-start-3 row-start-2 flex items-center justify-center py-1">
-        <AxisLabel text={axisXHigh} edge="right" />
+        <AxisLabel text={axisXHigh} edge="right" fontSize={axisLabelFontSize} tooltipFontSize={axisTooltipFontSize} />
       </div>
 
       {/* Y-axis low label (bottom) */}
       <div className="col-start-2 row-start-3 flex items-start justify-center px-1">
-        <AxisLabel text={axisYLow} edge="bottom" />
+        <AxisLabel text={axisYLow} edge="bottom" fontSize={axisLabelFontSize} tooltipFontSize={axisTooltipFontSize} />
       </div>
     </div>
   );
