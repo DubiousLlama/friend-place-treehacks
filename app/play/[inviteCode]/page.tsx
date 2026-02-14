@@ -28,6 +28,9 @@ export default function PlayPage() {
   // View mode: "graph" or "dashboard"
   const [view, setView] = useState<"graph" | "dashboard">("graph");
 
+  // When true, NameSelector is shown in "switch" mode (current data preserved)
+  const [switchingIdentity, setSwitchingIdentity] = useState(false);
+
   const supabase = createClient();
 
   const fetchAll = useCallback(async () => {
@@ -164,14 +167,13 @@ export default function PlayPage() {
       );
       if (!mySlot) return;
 
-      // 1. Update self placement + guesses count
+      // 1. Update self placement
       const { error: selfErr } = await supabase
         .from("game_players")
         .update({
           self_x: selfPosition.x,
           self_y: selfPosition.y,
           has_submitted: true,
-          guesses_count: guesses.length,
         })
         .eq("id", mySlot.id);
 
@@ -207,45 +209,6 @@ export default function PlayPage() {
     },
     [game, currentPlayerId, gamePlayers, supabase, fetchAll]
   );
-
-  // ---- Unclaim handler: releases the user's claimed name slot ----
-
-  const handleUnclaim = useCallback(async () => {
-    if (!game || !currentPlayerId) return;
-
-    const mySlot = gamePlayers.find(
-      (gp) => gp.player_id === currentPlayerId
-    );
-    if (!mySlot) return;
-
-    // 1. Delete all guesses by this user
-    const { error: delErr } = await supabase
-      .from("guesses")
-      .delete()
-      .eq("game_id", game.id)
-      .eq("guesser_game_player_id", mySlot.id);
-
-    if (delErr) console.error("Failed to delete guesses on unclaim:", delErr);
-
-    // 2. Clear the slot — release ownership and reset placement data
-    const { error: updErr } = await supabase
-      .from("game_players")
-      .update({
-        player_id: null,
-        claimed_at: null,
-        self_x: null,
-        self_y: null,
-        has_submitted: false,
-      })
-      .eq("id", mySlot.id);
-
-    if (updErr) console.error("Failed to unclaim slot:", updErr);
-
-    // 3. Refresh — mySlot will become null, showing NameSelector
-    setMyGuesses([]);
-    setView("graph");
-    await fetchAll();
-  }, [game, currentPlayerId, gamePlayers, supabase, fetchAll]);
 
   // ---- End game handler: host transitions to results phase ----
 
@@ -332,14 +295,20 @@ export default function PlayPage() {
     (gp) => gp.player_id === currentPlayerId
   );
 
-  // Not claimed yet — show NameSelector
-  if (!mySlot) {
+  // Not claimed yet, or actively switching identity — show NameSelector
+  if (!mySlot || switchingIdentity) {
     return (
       <NameSelector
         gameId={game.id}
         gamePlayers={gamePlayers}
         currentPlayerId={currentPlayerId!}
-        onClaimed={() => fetchAll()}
+        onClaimed={() => {
+          setSwitchingIdentity(false);
+          setMyGuesses([]);
+          fetchAll();
+        }}
+        currentSlotId={switchingIdentity && mySlot ? mySlot.id : undefined}
+        onCancel={() => setSwitchingIdentity(false)}
       />
     );
   }
@@ -390,7 +359,7 @@ export default function PlayPage() {
             mySlot={mySlot}
             inviteCode={inviteCode}
             guessedCount={guessedCount}
-            onUnclaim={handleUnclaim}
+            onUnclaim={() => setSwitchingIdentity(true)}
             onEditName={handleEditDisplayName}
             isHost={isHost}
             onEndGame={handleEndGame}
@@ -438,7 +407,7 @@ export default function PlayPage() {
         onPlayersChanged={() => {
           fetchAll();
         }}
-        onUnclaim={handleUnclaim}
+        onUnclaim={() => setSwitchingIdentity(true)}
         onEditName={handleEditDisplayName}
         isHost={isHost}
         onEndGame={handleEndGame}
