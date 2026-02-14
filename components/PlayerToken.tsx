@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useEffect } from "react";
 import { motion, useMotionValue, type PanInfo } from "framer-motion";
 import type { Position } from "@/lib/game-types";
 import type { Anchor } from "@/lib/label-placement";
@@ -90,32 +90,68 @@ export function PlayerToken({
   // Destructure pixel sizes from config
   const { dotSize, hitSize, labelOffset, labelFontSize, labelPadX, labelPadY, pillHeight, pillFontSize, pillPadX } = sizes;
 
-  // --- Scale compensation ---
+  // --- Scale + auto-scroll compensation ---
   const compensateX = useMotionValue(0);
   const compensateY = useMotionValue(0);
   const scaleRef = useRef(1);
+  const scaleCompRef = useRef({ x: 0, y: 0 });
+  const dragStartRectRef = useRef<{ left: number; top: number } | null>(null);
+  const autoScrollRafRef = useRef<number | null>(null);
 
   const handleDragStart = useCallback(() => {
     const graphEl = graphRef.current;
     if (graphEl) {
       scaleRef.current = graphEl.getBoundingClientRect().width / graphEl.offsetWidth;
+      // Record graph position so we can detect auto-scroll pan movement
+      const rect = graphEl.getBoundingClientRect();
+      dragStartRectRef.current = { left: rect.left, top: rect.top };
     }
-  }, [graphRef]);
+    scaleCompRef.current = { x: 0, y: 0 };
+
+    // For placed tokens, run a per-frame loop that compensates for graph panning
+    // (auto-scroll moves the graph div, which drifts the token from the pointer)
+    if (position !== null) {
+      function tick() {
+        const gEl = graphRef.current;
+        const start = dragStartRectRef.current;
+        if (gEl && start) {
+          const cur = gEl.getBoundingClientRect();
+          compensateX.set(scaleCompRef.current.x - (cur.left - start.left));
+          compensateY.set(scaleCompRef.current.y - (cur.top - start.top));
+        }
+        autoScrollRafRef.current = requestAnimationFrame(tick);
+      }
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    }
+  }, [graphRef, position, compensateX, compensateY]);
 
   const handleDrag = useCallback(
     (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       const s = scaleRef.current;
-      if (s !== 1) {
-        const factor = -(s - 1) / s;
-        compensateX.set(info.offset.x * factor);
-        compensateY.set(info.offset.y * factor);
+      const factor = s !== 1 ? -(s - 1) / s : 0;
+      scaleCompRef.current = { x: info.offset.x * factor, y: info.offset.y * factor };
+      // For tray pills (no rAF loop), apply scale comp directly
+      if (!dragStartRectRef.current) {
+        compensateX.set(scaleCompRef.current.x);
+        compensateY.set(scaleCompRef.current.y);
       }
+      // For placed tokens the rAF loop combines scale + auto-scroll compensation
     },
     [compensateX, compensateY]
   );
 
   const handleDragEnd = useCallback(
     (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      // Stop auto-scroll compensation loop
+      if (autoScrollRafRef.current) {
+        cancelAnimationFrame(autoScrollRafRef.current);
+        autoScrollRafRef.current = null;
+      }
+      dragStartRectRef.current = null;
+      scaleCompRef.current = { x: 0, y: 0 };
+      compensateX.set(0);
+      compensateY.set(0);
+
       if (disabled) return;
 
       const graphEl = graphRef.current;
@@ -142,8 +178,15 @@ export function PlayerToken({
         onRemove?.();
       }
     },
-    [disabled, graphRef, onPlace, onRemove]
+    [disabled, graphRef, onPlace, onRemove, compensateX, compensateY]
   );
+
+  // Clean up compensation loop on unmount
+  useEffect(() => {
+    return () => {
+      if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
+    };
+  }, []);
 
   // ---- Tray pill (unplaced) ----
   if (position === null) {

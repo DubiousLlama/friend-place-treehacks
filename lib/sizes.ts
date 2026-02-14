@@ -51,7 +51,7 @@ export const MOBILE_SIZES: GraphSizeConfig = {
   pillPadX: 12,
   axisLabelFontSize: 12,
   axisLabelTrack: 20,
-  axisTooltipFontSize: 12,
+  axisTooltipFontSize: 20,
 };
 
 export const DESKTOP_SIZES: GraphSizeConfig = {
@@ -66,7 +66,7 @@ export const DESKTOP_SIZES: GraphSizeConfig = {
   pillPadX: 14,
   axisLabelFontSize: 16,
   axisLabelTrack: 24,
-  axisTooltipFontSize: 14,
+  axisTooltipFontSize: 24,
 };
 
 // ---------------------------------------------------------------------------

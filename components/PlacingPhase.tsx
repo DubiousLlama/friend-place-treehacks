@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import type { Game, GamePlayer, Position, NamePlacement } from "@/lib/game-types";
-import { GameGraph } from "@/components/GameGraph";
+import { GameGraph, type TransformState } from "@/components/GameGraph";
 import { PlayerToken } from "@/components/PlayerToken";
 import { TokenTray } from "@/components/TokenTray";
 import { computeLabelAnchors } from "@/lib/label-placement";
@@ -66,6 +66,13 @@ export function PlacingPhase({
     () => toNormalizedSizes(sizeConfig, graphDims.width, graphDims.height),
     [sizeConfig, graphDims]
   );
+
+  // ---- Zoom-aware padding ----
+  const [graphScale, setGraphScale] = useState(1);
+  const handleTransformChange = useCallback((t: TransformState) => {
+    setGraphScale(t.scale);
+  }, []);
+  const isZoomed = graphScale > 1.05;
 
   // ---- State ----
   const [step, setStep] = useState<Step>("self");
@@ -190,8 +197,8 @@ export function PlacingPhase({
           </AnimatePresence>
         </div>
 
-        {/* Graph area */}
-        <div className="flex-1 flex items-center justify-center px-4 py-2 min-h-0">
+        {/* Graph area — padding shrinks when zoomed to maximize space */}
+        <div className={`flex-1 flex items-center justify-center min-h-0 transition-[padding] duration-200 ${isZoomed ? "px-1 py-1" : "px-4 py-2"}`}>
           <GameGraph
             axisXLow={game.axis_x_label_low}
             axisXHigh={game.axis_x_label_high}
@@ -199,6 +206,7 @@ export function PlacingPhase({
             axisYHigh={game.axis_y_label_high}
             graphRef={graphRef}
             sizes={sizeConfig}
+            onTransformChange={handleTransformChange}
           >
             {/* Self token — always editable */}
             {selfPosition !== null && (
