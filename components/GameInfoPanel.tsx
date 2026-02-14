@@ -133,12 +133,12 @@ export function GameInfoPanel({
                     type="text"
                     readOnly
                     value={shareUrl}
-                    className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs text-[var(--black)] font-mono truncate"
+                    className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-1.5 text-xs text-black font-mono truncate"
                   />
                   <button
                     type="button"
                     onClick={handleCopyLink}
-                    className="shrink-0 rounded-lg bg-[var(--black)] text-white px-3 py-1.5 text-xs font-medium hover:opacity-90 transition-opacity"
+                    className="shrink-0 rounded-lg bg-black text-white px-3 py-1.5 text-xs font-medium hover:opacity-90 transition-opacity"
                   >
                     {copySuccess ? "Copied!" : "Copy"}
                   </button>
