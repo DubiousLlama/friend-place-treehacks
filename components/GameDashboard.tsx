@@ -184,7 +184,7 @@ export function GameDashboard({
               Horizontal:{" "}
             </span>
             <span className="text-zinc-800 dark:text-zinc-200">
-              {game.axis_x_label_low} ↔ {game.axis_x_label_high}
+              {game.axis_x_label_low} vs. {game.axis_x_label_high}
             </span>
           </div>
           <div>
@@ -192,7 +192,7 @@ export function GameDashboard({
               Vertical:{" "}
             </span>
             <span className="text-zinc-800 dark:text-zinc-200">
-              {game.axis_y_label_low} ↔ {game.axis_y_label_high}
+              {game.axis_y_label_low} vs. {game.axis_y_label_high}
             </span>
           </div>
         </div>

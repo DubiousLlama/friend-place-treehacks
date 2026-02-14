@@ -186,8 +186,8 @@ export default function PlayPage() {
           Friend Place
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          {game.axis_x_label_low} ↔ {game.axis_x_label_high} &nbsp;|&nbsp;{" "}
-          {game.axis_y_label_low} ↔ {game.axis_y_label_high}
+          {game.axis_x_label_low} vs. {game.axis_x_label_high} &nbsp;|&nbsp;{" "}
+          {game.axis_y_label_low} vs. {game.axis_y_label_high}
         </p>
       </div>
       <GameDashboard
