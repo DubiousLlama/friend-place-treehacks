@@ -4,18 +4,18 @@ overview: Full architecture and implementation plan for "Friend Place," a daily 
 todos:
   - id: phase-1-db-auth
     content: "Phase 1: Set up Supabase project, define tables via SQL migrations, configure Supabase client + anonymous auth, enable Row Level Security"
-    status: pending
+    status: completed
   - id: phase-2-lobby
-    content: "Phase 2: Build API routes (create/join/start game), landing page, lobby UI with share link"
+    content: "Phase 2: Build game creation form (axes + player names + end time), name-claiming join flow, share link, Realtime subscriptions"
     status: pending
   - id: phase-3-graph
     content: "Phase 3: Build the 2D graph with pan/zoom, draggable player tokens, friend token tray, and gamefeel polish"
     status: pending
   - id: phase-4-submit
-    content: "Phase 4: Build submission API, auto-transition to results, scoring algorithm"
+    content: "Phase 4: Build submission API, time-based + early-end game completion, scoring algorithm"
     status: pending
   - id: phase-5-results
-    content: "Phase 5: Build results UI — scoreboard, animated placement reveal, accuracy visualization"
+    content: "Phase 5: Build results UI — scoreboard, animated placement reveal, accuracy visualization, account creation prompt"
     status: pending
   - id: phase-6-polish
     content: "Phase 6: Mobile responsiveness, error handling, Vercel deploy config, OG images"
@@ -25,6 +25,29 @@ isProject: false
 
 # Friend Place — Full Build Plan
 
+We’re building a daily online game in the style of wordle, except it is about connecting with your friends.
+
+Users can form a game and invite others. The game features a 2d graph with two silly axes (i.e. Gimli to Legolas and Muffin to Pancake). Each player sets their name, then puts themselves on the graph. Then, they place each of their friends who are also in the game.
+
+After the game period has ended (usually the end of the day) players earn points for how accurately they placed each of their friends (closeness to how that friend placed themselves), and players get a small amount of points for their friends guessing their placement accurately.
+
+Key elements of the user flow:
+
+- Because people play the game throughout the day and check back in later to see how they scored, we need to keep track of who is who. However, we don’t want to force people to create an account before they start playing—they should be able to just click a link and go.
+- Players drag and drop their friends onto the map. Our tech stack needs to support smooth, responsive dragging, panning, and zooming on the map. Gamefeel is key.
+
+## Core User Flow
+
+Player sets up a game. 
+
+To set up a game, they give the names of each person that they want to play with, then send a lobby link to all their friends. As each player joins, they can select the name that they are from the list (this is then removed from the list of options- and they can rename themselves if needed).
+
+Players place each name that has been specified for the game. New users can also join via the link (+ add player option) -> users can come back to the game throughout the day to place new users that have joined.
+
+The game ends after a specified time (usually at midnight in the creator's timezone), at which point navigating to the link shows the score screen. By default, the game also ends early after all names have been claimed and all users have made placements- this can be unchecked in game setup config. 
+
+Users are prompted to make an account at this time so they can easily recreate game groups + save their score history.
+
 ## Architecture Overview
 
 ```mermaid
@@ -33,7 +56,7 @@ graph TD
     Client -->|API Routes for scoring| API["Next.js API Routes"]
     API -->|supabase-js service role| Supabase
     Supabase -->|Postgres| DB["Supabase Postgres"]
-    Supabase -->|Realtime channels| RT["Realtime (lobby status, submission updates)"]
+    Supabase -->|Realtime channels| RT["Realtime (name claims, submissions, phase changes)"]
     Supabase -->|Anonymous sign-in| Auth["Supabase Auth (anon)"]
     Client -->|Framer Motion| Drag["Drag/Drop + Pan/Zoom"]
     Vercel["Vercel Hosting"] --> Client
@@ -60,12 +83,12 @@ Supabase replaces several separate services by providing Postgres, Auth, Realtim
 
 - **Supabase Postgres** — the database. Tables defined via SQL migrations managed with the Supabase CLI. We query directly from the client using `supabase-js` (with RLS protecting data) and from server-side API routes using the service-role key for privileged operations like scoring.
 - **Supabase Auth (Anonymous sign-in)** — Supabase supports [anonymous sign-in](https://supabase.com/docs/guides/auth/auth-anonymous). When a user visits a game link, we call `supabase.auth.signInAnonymously()`. This creates a persistent session (stored in localStorage by `supabase-js`) with a real `auth.uid()` that RLS policies can reference. No email, no password, no friction. Users can later link an email/OAuth provider to "claim" their account.
-- **Supabase Realtime** — subscribe to Postgres changes on the `game_players` table to get live updates: "X joined the lobby," "X has submitted," and auto-transition to results when everyone is done. No polling needed, no third-party service.
+- **Supabase Realtime** — subscribe to Postgres changes on the `game_players` table to get live updates: "X claimed a name," "X has submitted," and new player additions. Subscribe to the `games` table to detect phase transitions (e.g., game ends → `results`). No polling needed, no third-party service.
 - **Supabase RPC (Postgres functions)** — for the scoring calculation, we can use a Postgres function called via `supabase.rpc('calculate_scores', { game_id })` to atomically compute scores server-side when the last player submits.
 
 ### API Routes (minimal)
 
-- **Next.js Route Handlers** (`app/api/`) — only needed for logic that shouldn't run client-side: score computation (uses service-role key), game phase transitions, and any future webhooks. Most reads and writes go directly through `supabase-js` from the client, protected by RLS.
+- **Next.js Route Handlers** (`app/api/`) — only needed for logic that shouldn't run client-side: score computation (uses service-role key), game end transitions (time-based or early-end), and any future webhooks. Most reads and writes go directly through `supabase-js` from the client, protected by RLS.
 
 ### Deployment
 
@@ -94,26 +117,28 @@ erDiagram
         uuid created_by FK
         timestamp created_at
         timestamp submissions_lock_at
+        boolean end_early_when_complete
     }
     GamePlayer {
         uuid id PK
         uuid game_id FK
-        uuid player_id FK
+        uuid player_id FK_nullable
+        string display_name UK_per_game
         float self_x
         float self_y
         boolean has_submitted
         float score
-        timestamp joined_at
+        timestamp claimed_at
     }
     Guess {
         uuid id PK
         uuid game_id FK
-        uuid guesser_id FK
-        uuid target_id FK
+        uuid guesser_game_player_id FK
+        uuid target_game_player_id FK
         float guess_x
         float guess_y
     }
-    Player ||--o{ GamePlayer : joins
+    Player ||--o{ GamePlayer : claims
     Game ||--o{ GamePlayer : has
     GamePlayer ||--o{ Guess : makes
     GamePlayer ||--o{ Guess : "is target of"
@@ -123,20 +148,28 @@ erDiagram
 
 Key design decisions:
 
-- `**Game.phase**`: enum of `lobby` | `placing` | `results`. Controls what UI to show.
+- `**Game.phase**`: enum of `placing` | `results`. There is no `lobby` phase — the game enters `placing` immediately upon creation. The `/play/[inviteCode]` page handles name selection before showing the graph.
 - `**Game.invite_code**`: short, human-friendly code (e.g., 6 alphanumeric chars) for sharing.
+- `**Game.submissions_lock_at**`: the deadline after which the game transitions to `results` (default: midnight in the creator's timezone, computed client-side and stored as an absolute timestamp).
+- `**Game.end_early_when_complete**`: boolean (default `true`). When enabled, the game also ends early once all name slots are claimed and all players have submitted placements.
+- **Name slot pattern**: The creator pre-populates `game_players` rows at game creation time, one per friend name. These rows have `player_id = NULL` until a real user claims them by selecting the name. This means `GamePlayer.player_id` is **nullable** — a `NULL` value means the name slot is unclaimed.
+- `**GamePlayer.display_name**`: unique per game (`UNIQUE(game_id, display_name)`). Set by the creator at game creation; the claiming player can rename themselves if needed.
+- `**GamePlayer.claimed_at**`: nullable timestamp, set when a user claims the name slot (replaces `joined_at`).
 - **Coordinates** are normalized floats (0.0 to 1.0) so they're resolution-independent.
-- `**Guess**` stores where guesser thinks target placed themselves. One row per (guesser, target) pair per game.
-- `**GamePlayer.score**`: computed server-side when game transitions to results. Added as a nullable float column.
+- `**Guess**` references `game_players(id)` for both `guesser_game_player_id` and `target_game_player_id` (not `players(id)`), since targets may be unclaimed name slots with no entry in the `players` table. One row per (guesser, target) pair per game.
+- `**GamePlayer.score**`: computed server-side when game transitions to results. Nullable float.
 - `**Player.id**` maps to `auth.uid()` from Supabase Auth (anonymous or linked account).
 
 ### Row Level Security (RLS) Policies
 
 RLS is critical since clients talk directly to Supabase:
 
-- `**games**`: Anyone can `SELECT` (read game info). Only authenticated users can `INSERT` (create games).
-- `**game_players**`: Players can `SELECT` all players in games they belong to. Players can `INSERT` themselves (join). Players can `UPDATE` only their own row (set display name, self-placement).
-- `**guesses**`: Players can `INSERT` their own guesses. Players can only `SELECT` guesses in games that are in `results` phase (prevents peeking).
+- `**games**`: Anyone can `SELECT` (read game info). Only authenticated users can `INSERT` (create games, must set `created_by = auth.uid()`).
+- `**game_players**`:
+  - `SELECT`: Anyone authenticated can read all game player rows.
+  - `INSERT`: The game creator can insert rows with `player_id IS NULL` (pre-populating name slots at game creation). Any authenticated user can insert a row with `player_id = auth.uid()` (the "+ add player" mid-game flow).
+  - `UPDATE`: A player can claim an unclaimed row (set `player_id` to their `auth.uid()` where `player_id IS NULL`). A player can update their own claimed row (`player_id = auth.uid()`) for self-placement, display name changes, and submission.
+- `**guesses**`: Players can `INSERT` and `UPDATE` their own guesses (where `guesser_game_player_id` points to a `game_players` row they own). Players can only `SELECT` guesses in games that are in `results` phase (prevents peeking).
 - Service-role key bypasses RLS for scoring and phase transitions in API routes.
 
 ---
@@ -146,25 +179,31 @@ RLS is critical since clients talk directly to Supabase:
 ```mermaid
 sequenceDiagram
     participant Creator
-    participant Server
+    participant Supabase
     participant Friend
 
-    Creator->>Server: POST /api/games (create game, set axes)
-    Server-->>Creator: game_id + invite_code
+    Creator->>Supabase: Insert game (axes, end time) + batch-insert name slots
+    Supabase-->>Creator: game_id + invite_code
+    Note over Creator,Supabase: Game phase: PLACING (immediate)
 
     Creator->>Friend: Share link (/play/[invite_code])
-    Friend->>Server: GET /play/[invite_code] (auto-create session)
-    Friend->>Server: POST /api/games/[id]/join (set display name)
+    Friend->>Supabase: GET /play/[invite_code] (auto signInAnonymously)
+    Friend->>Supabase: Update game_players row (claim name slot)
 
-    Note over Creator,Friend: Phase: PLACING
+    Creator->>Supabase: Place self + all other names on graph
+    Friend->>Supabase: Place self + all other names on graph
 
-    Creator->>Server: POST /api/games/[id]/submit (self placement + guesses)
-    Friend->>Server: POST /api/games/[id]/submit (self placement + guesses)
+    Creator->>Supabase: POST /api/games/[id]/submit (self + guesses)
+    Friend->>Supabase: POST /api/games/[id]/submit (self + guesses)
 
-    Note over Creator,Friend: Phase: RESULTS (when all submitted)
+    Note over Creator,Friend: New player joins mid-game (+ add player)
+    Friend->>Supabase: Insert new game_players row (claimed)
+    Note over Creator,Friend: Existing players return to place new name
 
-    Creator->>Server: GET /api/games/[id]/results
-    Friend->>Server: GET /api/games/[id]/results
+    Note over Creator,Friend: Game ends: submissions_lock_at OR early end
+    Supabase-->>Creator: Phase: RESULTS + scores computed
+    Supabase-->>Friend: Phase: RESULTS + scores computed
+    Note over Creator,Friend: Account creation prompt shown
 ```
 
 
@@ -173,43 +212,50 @@ sequenceDiagram
 
 **Direct client-to-Supabase (via `supabase-js`, protected by RLS):**
 
-- Create game — `supabase.from('games').insert(...)`
-- Join game — `supabase.from('game_players').insert(...)`
-- Set display name — `supabase.from('game_players').update(...)`
+- Create game — `supabase.from('games').insert(...)` + `supabase.from('game_players').insert([...name slots...])`
+- Claim a name — `supabase.from('game_players').update({ player_id: auth.uid() }).eq('id', slot_id)`
+- Add new player mid-game — `supabase.from('game_players').insert({ game_id, player_id: auth.uid(), display_name })`
 - Read game state — `supabase.from('games').select('*, game_players(*)')`
 - Read results — `supabase.from('games').select('*, game_players(*), guesses(*)')` (RLS restricts guesses to results phase)
+- Realtime — subscribe to `game_players` table for live claim updates, new player additions, and submission status
 
 **Next.js API Routes (server-side, uses service-role key):**
 
-- `POST /api/games/[id]/start` — Creator starts game (validates creator, transitions phase)
-- `POST /api/games/[id]/submit` — Submit placements + guesses, check if all players done, compute scores and transition to results if so
+- `POST /api/games/[id]/submit` — Submit self-placement + guesses; if `end_early_when_complete` is true and all names claimed + all players submitted, transition to `results` and compute scores
+- `POST /api/games/[id]/end` — Time-based game end: triggered by a Vercel Cron job (or client-side check on page load) when `submissions_lock_at` has passed; transitions game to `results` and computes scores
 
 ---
 
 ## 4. Scoring Algorithm
 
 - **Guess accuracy** = `1 - euclidean_distance(guess, target_self_placement)` (clamped to 0). Since coords are 0-1, max distance is ~1.41. Normalize so a perfect guess = 100 points.
-- **Points for guesser**: Points proportional to accuracy for each friend guessed.
+- **Points for guesser**: Points proportional to accuracy for each name guessed.
 - **Points for target**: Small bonus (e.g., 20% of the accuracy score) when a friend guesses them accurately. This rewards being "predictable" / self-aware.
 - Total score = sum of guesser points + sum of target bonuses.
+
+**Edge cases for the new flow:**
+
+- **Unclaimed name slots** (name was pre-populated but nobody claimed it): excluded from scoring entirely — no `self_x`/`self_y` to score against, so guesses for that target earn 0 points and are not penalized.
+- **Claimed but not submitted**: A player who claimed a name and placed themselves but never submitted guesses scores 0 as a guesser. They can still be a target if they placed themselves (i.e., their `self_x`/`self_y` are set).
+- **Late joiners**: Players added mid-game via "+ add player" are included in scoring. Existing players who return to place the new name can update their guesses (upsert).
 
 ---
 
 ## 5. Page Structure
 
 
-| Route                        | Page           | Description                                                      |
-| ---------------------------- | -------------- | ---------------------------------------------------------------- |
-| `/`                          | Home / Landing | "Create a Game" button, brief explainer                          |
-| `/play/[inviteCode]`         | Game page      | Dynamic — shows lobby, placing, or results based on `game.phase` |
-| `/play/[inviteCode]/results` | Results page   | Scoreboard, animated reveal of placements                        |
+| Route                        | Page           | Description                                                        |
+| ---------------------------- | -------------- | ------------------------------------------------------------------ |
+| `/`                          | Home / Landing | "Create a Game" form: axis labels, player names, end time, config  |
+| `/play/[inviteCode]`         | Game page      | Dynamic — shows name selection, placing, or results                |
+| `/play/[inviteCode]/results` | Results page   | Scoreboard, animated reveal of placements, account creation prompt |
 
 
-The `/play/[inviteCode]` page is the core — it handles all three phases with conditional rendering:
+The `/play/[inviteCode]` page is the core — it conditionally renders based on game state and user state:
 
-1. **Lobby**: Show joined players, share link, creator can start game
-2. **Placing**: The 2D graph. Player places themselves, then drags friend tokens onto the map
-3. **Results**: Animated scoreboard, overlay showing where everyone placed themselves vs. where friends guessed
+1. **Name selection** (user hasn't claimed a name, game is `placing`): Show list of unclaimed names from the pre-populated slots. User picks their name (removed from the list). They can rename themselves if needed. Also shows a "+ add player" option for names the creator missed.
+2. **Placing** (user has claimed a name, game is `placing`): The 2D graph. Player places themselves, then drags every other name in the game onto the graph. If new players are added mid-game, the user is prompted to return and place them.
+3. **Results** (game phase is `results`): Animated scoreboard, overlay showing where everyone placed themselves vs. where others guessed. Users are prompted to create an account to save their score history and easily recreate game groups.
 
 ---
 
@@ -221,7 +267,7 @@ This is the most critical piece for gamefeel:
 - **Axes**: Drawn with Tailwind-styled divs — crosshair lines at 50%, labels at extremes (e.g., "Gimli" on left, "Legolas" on right)
 - **Player tokens**: `<motion.div>` from Framer Motion with `drag` enabled, spring physics on release, and snap constraints to stay within bounds
 - **Self-placement**: A distinct colored token the player drags to place themselves
-- **Friend guessing**: Each friend appears as a named token in a "tray" below the graph; the player drags them onto the graph
+- **Placing others**: Every other name in the game (claimed and unclaimed) appears as a named token in a "tray" below the graph; the player drags them onto the graph to guess their position
 - **Visual feedback**: Tokens glow/pulse when dragged, snap with a satisfying spring, subtle haptic-style scale animation on drop
 
 ---
@@ -251,27 +297,31 @@ npm install -D supabase
 ```
 app/
   layout.tsx                  (root layout, global styles)
-  page.tsx                    (landing page — create game)
+  page.tsx                    (landing page — game creation form)
   play/
     [inviteCode]/
-      page.tsx                (main game page — lobby/placing/results)
+      page.tsx                (main game page — name selection / placing / results)
   api/
     games/
       [id]/
-        submit/route.ts       (POST: submit placements, trigger scoring)
-        start/route.ts        (POST: start game — phase transition)
+        submit/route.ts       (POST: submit placements, trigger scoring + early end check)
+        end/route.ts          (POST: time-based game end, compute scores — called by cron or client)
 components/
   GameGraph.tsx               (the 2D coordinate graph with pan/zoom)
-  PlayerToken.tsx             (draggable token for self + friends)
-  TokenTray.tsx               (tray of friend tokens to drag onto graph)
-  Lobby.tsx                   (waiting room, share link, player list)
+  PlayerToken.tsx             (draggable token for self + others)
+  TokenTray.tsx               (tray of name tokens to drag onto graph)
+  GameSetup.tsx               (game creation form: axes, player names, end time, config)
+  NameSelector.tsx            (UI for claiming a name from the pre-populated list + add player)
+  PlacingPhase.tsx            (the placing step: self-placement + guessing others)
   Results.tsx                 (scoreboard, placement reveal)
   ScoreCard.tsx               (individual score breakdown)
+  AccountPrompt.tsx           (post-game prompt to link anonymous account to email/OAuth)
 lib/
   supabase/
     client.ts                 (browser Supabase client)
     server.ts                 (server-side Supabase client via @supabase/ssr)
     middleware.ts              (refresh session cookie on each request)
+    admin.ts                  (admin client using service-role key)
   scoring.ts                  (scoring algorithm — called from API route)
   utils.ts                    (shared utilities)
   types.ts                    (TypeScript types generated from Supabase schema)
@@ -282,7 +332,7 @@ supabase/
 middleware.ts                 (Next.js middleware — calls Supabase session refresh)
 ```
 
-Note: Many routes that were previously API endpoints (create game, join game, get game state, get results) are now handled directly by `supabase-js` client queries, protected by RLS. Only privileged operations (scoring, phase transitions) need API routes with the service-role key.
+Note: Most reads and writes go directly through `supabase-js` from the client, protected by RLS (game creation, name claiming, reading game state, reading results). Only privileged operations (scoring, phase transitions) need API routes with the service-role key. The `start` route has been removed — games enter `placing` phase immediately upon creation.
 
 ---
 
@@ -300,41 +350,47 @@ The build is broken into 6 phases, each producing a working increment:
 - Generate TypeScript types from the Supabase schema (`npx supabase gen types typescript`)
 - Set environment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 
-### Phase 2: Game Creation + Lobby
+### Phase 2: Game Creation + Name-Claiming Join Flow
 
-- Landing page (`/`) with "Create Game" form — inserts into `games` table directly via `supabase-js` (anon user creates game)
+- Landing page (`/`) with `GameSetup` form: axis labels, list of player names, end time (default: midnight tonight), "end early when complete" toggle
+- Form inserts into `games` table (phase defaults to `placing`) + batch-inserts `game_players` rows as name slots (with `player_id = NULL`) — all via `supabase-js`
+- Creator is auto-signed-in anonymously and auto-claims their own name slot
 - `/play/[inviteCode]` page — auto-triggers `signInAnonymously()` if no session, then fetches game by invite code
-- "Set display name + join" flow — upserts into `game_players` via `supabase-js`
-- Lobby UI showing player list, share link, "Start Game" button for creator
-- `POST /api/games/[id]/start` — server-side route to transition phase from `lobby` to `placing`
-- Subscribe to Supabase Realtime on `game_players` table to show live join updates
+- `NameSelector` component: show unclaimed name slots, user picks their name (claims the slot by setting `player_id`). User can rename themselves. Also shows "+ add player" button to insert a new `game_players` row mid-game.
+- Player list sidebar showing who has claimed which name (claimed vs. unclaimed visual distinction)
+- Share link UI (copy invite URL to clipboard)
+- Subscribe to Supabase Realtime on `game_players` table to show live claim updates and new player additions
 
 ### Phase 3: The 2D Graph (Core Experience)
 
 - Build `GameGraph` component with pan/zoom via `@use-gesture/react`
 - Build `PlayerToken` with Framer Motion drag
-- Build `TokenTray` for friend tokens
-- Wire up self-placement and friend-guessing UX
+- Build `TokenTray` for all name tokens (not just friends — every other name in the game)
+- Wire up self-placement and name-guessing UX
 - Tune spring physics and visual feedback for gamefeel
 
-### Phase 4: Submission + Results
+### Phase 4: Submission + Game Ending
 
-- `POST /api/games/[id]/submit` — server-side route that: persists self-placement + guesses, checks if all players have submitted, transitions game to `results` phase, and computes scores
+- `POST /api/games/[id]/submit` — server-side route that: persists self-placement + guesses (as upserts to allow updating), checks if `end_early_when_complete` is true and all names are claimed and all players have submitted — if so, transitions game to `results` and computes scores
+- `POST /api/games/[id]/end` — server-side route for time-based game end: checks `submissions_lock_at`, transitions to `results`, computes scores. Called by a Vercel Cron job or triggered client-side on page load when deadline has passed.
 - Scoring algorithm in `lib/scoring.ts` (called server-side with service-role access to read all placements)
 - Scores written back to `game_players.score` column
 - Realtime subscription on `games` table detects phase change to `results`, triggering UI transition
+- Support partial submissions — players can submit now and return later to place newly-added players (guesses are upserted, not replaced)
 
 ### Phase 5: Results UI
 
 - Scoreboard with rankings
-- Animated reveal: show where each player placed themselves, then show where friends guessed
+- Animated reveal: show where each player placed themselves, then show where others guessed
 - Visual comparison (lines from guess to actual position, color-coded by accuracy)
+- `AccountPrompt` component: prompt users to link their anonymous account to email/OAuth (via `supabase.auth.updateUser()` or `linkIdentity()`) so they can save score history and easily recreate game groups
 
 ### Phase 6: Polish + Deploy
 
 - Mobile responsiveness (touch gestures, responsive layout)
-- Error handling, loading states, edge cases
+- Error handling, loading states, edge cases (unclaimed names, late joiners, expired games)
 - Vercel deployment configuration + Supabase environment variables
+- Vercel Cron job for transitioning games past `submissions_lock_at`
 - OG image / share metadata for invite links
 - Optional: Supabase Edge Function or Vercel Cron for daily axis pair generation
 
