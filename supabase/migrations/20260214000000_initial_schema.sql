@@ -2,7 +2,7 @@
 -- Friend Place: Initial Schema (v2 — name-slot pattern)
 -- =============================================
 
--- Enum for game phases (no lobby — games start in placing)
+-- Enum for game phases (no lobby — games start in "placing" immediately)
 CREATE TYPE game_phase AS ENUM ('placing', 'results');
 
 -- Players (maps 1:1 to Supabase auth.users via id)
@@ -46,13 +46,12 @@ CREATE TABLE game_players (
 );
 
 -- Guesses (one per guesser-target pair per game)
--- References game_players(id) for both guesser and target,
--- since targets may be unclaimed name slots with no players row.
+-- References game_players(id) instead of players(id) since targets may be unclaimed name slots
 CREATE TABLE guesses (
   id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   game_id                   uuid NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-  guesser_game_player_id    uuid NOT NULL REFERENCES game_players(id),
-  target_game_player_id     uuid NOT NULL REFERENCES game_players(id),
+  guesser_game_player_id    uuid NOT NULL REFERENCES game_players(id) ON DELETE CASCADE,
+  target_game_player_id     uuid NOT NULL REFERENCES game_players(id) ON DELETE CASCADE,
   guess_x                   real NOT NULL,
   guess_y                   real NOT NULL,
   UNIQUE(game_id, guesser_game_player_id, target_game_player_id)
@@ -87,42 +86,45 @@ CREATE POLICY "Authenticated users can create games"
   ON games FOR INSERT TO authenticated
   WITH CHECK (created_by = auth.uid());
 
--- game_players: read all; insert name slots (creator) or self-add; claim unclaimed or update own
+-- game_players: read all; insert name slots (creator) or self (mid-game join); update own or claim unclaimed
 CREATE POLICY "Read game players"
   ON game_players FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "Insert name slots or add self"
+-- Creator can insert name slots (player_id IS NULL) for games they created,
+-- OR any authenticated user can insert a row claiming themselves (player_id = auth.uid())
+CREATE POLICY "Insert game player"
   ON game_players FOR INSERT TO authenticated
   WITH CHECK (
-    -- Creator inserting unclaimed name slots (player_id IS NULL)
-    player_id IS NULL
-    AND EXISTS (
-      SELECT 1 FROM games WHERE games.id = game_id AND games.created_by = auth.uid()
+    player_id = auth.uid()
+    OR (
+      player_id IS NULL
+      AND EXISTS (
+        SELECT 1 FROM games
+        WHERE games.id = game_players.game_id
+          AND games.created_by = auth.uid()
+      )
     )
-    -- OR any authenticated user adding themselves mid-game
-    OR player_id = auth.uid()
   );
 
-CREATE POLICY "Claim unclaimed slot or update own row"
+-- Players can update their own claimed row (player_id = auth.uid()),
+-- OR claim an unclaimed row (player_id IS NULL -> set to auth.uid())
+CREATE POLICY "Update game player"
   ON game_players FOR UPDATE TO authenticated
   USING (
-    -- Can claim an unclaimed slot (player_id IS NULL currently)
-    player_id IS NULL
-    -- Or update a row you already own
-    OR player_id = auth.uid()
+    player_id = auth.uid()
+    OR player_id IS NULL
   )
   WITH CHECK (
-    -- After update, player_id must be your own uid (claiming) or unchanged
     player_id = auth.uid()
   );
 
--- guesses: insert/update own (via game_player ownership); read only in results phase
+-- guesses: can insert/update own; can only read when game is in results phase
 CREATE POLICY "Insert own guesses"
   ON guesses FOR INSERT TO authenticated
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM game_players
-      WHERE game_players.id = guesser_game_player_id
+      WHERE game_players.id = guesses.guesser_game_player_id
         AND game_players.player_id = auth.uid()
     )
   );
@@ -132,7 +134,7 @@ CREATE POLICY "Update own guesses"
   USING (
     EXISTS (
       SELECT 1 FROM game_players
-      WHERE game_players.id = guesser_game_player_id
+      WHERE game_players.id = guesses.guesser_game_player_id
         AND game_players.player_id = auth.uid()
     )
   );

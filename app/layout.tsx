@@ -1,17 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { Outfit, DM_Sans } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -27,7 +16,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: "Friend Place",
-  description: "See how well your friends know where you'd place yourself.",
+  description: "Place your friends on alignment charts. Think Wordle meets Wavelength.",
 };
 
 export default function RootLayout({
@@ -38,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} ${dmSans.variable} antialiased`}
+        className={`${outfit.variable} ${dmSans.variable} antialiased`}
       >
         {children}
       </body>

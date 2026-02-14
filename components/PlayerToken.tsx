@@ -1,18 +1,14 @@
 "use client";
 
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useEffect } from "react";
 import { motion, useMotionValue, type PanInfo } from "framer-motion";
 import type { Position } from "@/lib/game-types";
 import type { Anchor } from "@/lib/label-placement";
+import type { GraphSizeConfig } from "@/lib/sizes";
+import { DESKTOP_SIZES } from "@/lib/sizes";
 import { pixelToNormalized, normalizedToPercent } from "@/lib/graph-utils";
 import { springTransition, tapScale, hoverLift } from "@/lib/motion";
-
-/** Size of the placement dot in px */
-const DOT_SIZE = 12;
-/** Size of the invisible hit area around the dot (must be > DOT_SIZE to prevent cursor oscillation) */
-const HIT_SIZE = 28;
-/** Size of tray pill height in px */
-const PILL_H = 36;
+import { dragShadowTray, dragShadowPlaced, hoverShadow } from "@/lib/theme";
 
 interface PlayerTokenProps {
   /** Unique identifier for layoutId animations */
@@ -33,29 +29,47 @@ interface PlayerTokenProps {
   disabled?: boolean;
   /** Label anchor direction computed by collision avoidance (placed tokens only) */
   labelAnchor?: Anchor;
+  /** Responsive size config — defaults to DESKTOP_SIZES */
+  sizes?: GraphSizeConfig;
 }
 
-// ---- Label offset styles keyed by anchor direction ----
-const LABEL_OFFSET = 10; // px from dot edge
+// ---------------------------------------------------------------------------
+// Label offset styles keyed by anchor direction
+// ---------------------------------------------------------------------------
 
-function labelStyle(anchor: Anchor): React.CSSProperties {
+function labelStyle(anchor: Anchor, hitSize: number, labelOffset: number): React.CSSProperties {
   const base: React.CSSProperties = {
     position: "absolute",
     whiteSpace: "nowrap",
     pointerEvents: "none",
   };
-  const c = HIT_SIZE / 2;
+  const c = hitSize / 2;
   switch (anchor) {
+    // --- right side ---
     case "ne":
-      return { ...base, left: c + LABEL_OFFSET, bottom: c };
-    case "nw":
-      return { ...base, right: c + LABEL_OFFSET, bottom: c };
+      return { ...base, left: c + labelOffset, bottom: c };
+    case "e":
+      return { ...base, left: c + labelOffset, top: "50%", transform: "translateY(-50%)" };
     case "se":
-      return { ...base, left: c + LABEL_OFFSET, top: c };
+      return { ...base, left: c + labelOffset, top: c };
+    // --- centred horizontally ---
+    case "n":
+      return { ...base, left: "50%", transform: "translateX(-50%)", bottom: c + labelOffset };
+    case "s":
+      return { ...base, left: "50%", transform: "translateX(-50%)", top: c + labelOffset };
+    // --- left side ---
+    case "nw":
+      return { ...base, right: c + labelOffset, bottom: c };
     case "sw":
-      return { ...base, right: c + LABEL_OFFSET, top: c };
+      return { ...base, right: c + labelOffset, top: c };
+    case "w":
+      return { ...base, right: c + labelOffset, top: "50%", transform: "translateY(-50%)" };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function PlayerToken({
   id,
@@ -67,38 +81,78 @@ export function PlayerToken({
   graphRef,
   disabled = false,
   labelAnchor = "ne",
+  sizes = DESKTOP_SIZES,
 }: PlayerTokenProps) {
   const tokenRef = useRef<HTMLDivElement>(null);
 
   const isSelf = variant === "self";
   const colorClass = isSelf ? "bg-splash" : "bg-accent";
 
-  // --- Scale compensation ---
+  // Destructure pixel sizes from config
+  const { dotSize, hitSize, labelOffset, labelFontSize, labelPadX, labelPadY, pillHeight, pillFontSize, pillPadX } = sizes;
+
+  // --- Scale + auto-scroll compensation ---
   const compensateX = useMotionValue(0);
   const compensateY = useMotionValue(0);
   const scaleRef = useRef(1);
+  const scaleCompRef = useRef({ x: 0, y: 0 });
+  const dragStartRectRef = useRef<{ left: number; top: number } | null>(null);
+  const autoScrollRafRef = useRef<number | null>(null);
 
   const handleDragStart = useCallback(() => {
     const graphEl = graphRef.current;
     if (graphEl) {
       scaleRef.current = graphEl.getBoundingClientRect().width / graphEl.offsetWidth;
+      // Record graph position so we can detect auto-scroll pan movement
+      const rect = graphEl.getBoundingClientRect();
+      dragStartRectRef.current = { left: rect.left, top: rect.top };
     }
-  }, [graphRef]);
+    scaleCompRef.current = { x: 0, y: 0 };
+
+    // For placed tokens, run a per-frame loop that compensates for graph panning
+    // (auto-scroll moves the graph div, which drifts the token from the pointer)
+    if (position !== null) {
+      function tick() {
+        const gEl = graphRef.current;
+        const start = dragStartRectRef.current;
+        if (gEl && start) {
+          const cur = gEl.getBoundingClientRect();
+          compensateX.set(scaleCompRef.current.x - (cur.left - start.left));
+          compensateY.set(scaleCompRef.current.y - (cur.top - start.top));
+        }
+        autoScrollRafRef.current = requestAnimationFrame(tick);
+      }
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    }
+  }, [graphRef, position, compensateX, compensateY]);
 
   const handleDrag = useCallback(
     (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       const s = scaleRef.current;
-      if (s !== 1) {
-        const factor = -(s - 1) / s;
-        compensateX.set(info.offset.x * factor);
-        compensateY.set(info.offset.y * factor);
+      const factor = s !== 1 ? -(s - 1) / s : 0;
+      scaleCompRef.current = { x: info.offset.x * factor, y: info.offset.y * factor };
+      // For tray pills (no rAF loop), apply scale comp directly
+      if (!dragStartRectRef.current) {
+        compensateX.set(scaleCompRef.current.x);
+        compensateY.set(scaleCompRef.current.y);
       }
+      // For placed tokens the rAF loop combines scale + auto-scroll compensation
     },
     [compensateX, compensateY]
   );
 
   const handleDragEnd = useCallback(
     (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      // Stop auto-scroll compensation loop
+      if (autoScrollRafRef.current) {
+        cancelAnimationFrame(autoScrollRafRef.current);
+        autoScrollRafRef.current = null;
+      }
+      dragStartRectRef.current = null;
+      scaleCompRef.current = { x: 0, y: 0 };
+      compensateX.set(0);
+      compensateY.set(0);
+
       if (disabled) return;
 
       const graphEl = graphRef.current;
@@ -116,7 +170,7 @@ export function PlayerToken({
         pointerY <= graphRect.bottom + pad;
 
       if (nearGraph) {
-        const normalized = pixelToNormalized(pointerX, pointerY, graphRect, DOT_SIZE / 2);
+        const normalized = pixelToNormalized(pointerX, pointerY, graphRect);
         onPlace(normalized);
         if (typeof navigator !== "undefined" && navigator.vibrate) {
           navigator.vibrate(10);
@@ -125,8 +179,15 @@ export function PlayerToken({
         onRemove?.();
       }
     },
-    [disabled, graphRef, onPlace, onRemove]
+    [disabled, graphRef, onPlace, onRemove, compensateX, compensateY]
   );
+
+  // Clean up compensation loop on unmount
+  useEffect(() => {
+    return () => {
+      if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
+    };
+  }, []);
 
   // ---- Tray pill (unplaced) ----
   if (position === null) {
@@ -147,13 +208,11 @@ export function PlayerToken({
           onDragEnd={handleDragEnd}
           whileDrag={{
             scale: 1.08,
-            boxShadow: isSelf
-              ? "0 0 0 3px rgba(249,135,78,0.3), 0 6px 20px rgba(0,0,0,0.18)"
-              : "0 0 0 3px rgba(98,126,248,0.3), 0 6px 20px rgba(0,0,0,0.18)",
+            boxShadow: dragShadowTray(variant),
             zIndex: 50,
           }}
           whileTap={disabled ? undefined : tapScale}
-          whileHover={disabled ? undefined : { ...hoverLift, boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
+          whileHover={disabled ? undefined : { ...hoverLift, boxShadow: hoverShadow }}
           transition={springTransition}
           role="button"
           tabIndex={disabled ? -1 : 0}
@@ -165,11 +224,11 @@ export function PlayerToken({
             ${disabled ? "opacity-70 cursor-default" : "cursor-grab active:cursor-grabbing"}
           `}
           style={{
-            height: PILL_H,
-            paddingLeft: 14,
-            paddingRight: 14,
-            fontSize: 12,
-            minHeight: PILL_H,
+            height: pillHeight,
+            paddingLeft: pillPadX,
+            paddingRight: pillPadX,
+            fontSize: pillFontSize,
+            minHeight: pillHeight,
           }}
         >
           <span className="truncate leading-tight" style={{ maxWidth: 80 }}>
@@ -184,8 +243,8 @@ export function PlayerToken({
   const wrapperStyle: React.CSSProperties = {
     position: "absolute",
     ...normalizedToPercent(position),
-    marginLeft: -HIT_SIZE / 2,
-    marginTop: -HIT_SIZE / 2,
+    marginLeft: -hitSize / 2,
+    marginTop: -hitSize / 2,
   };
 
   return (
@@ -198,59 +257,55 @@ export function PlayerToken({
         zIndex: 10,
       }}
     >
-      {/* Layer 2: inverse scale — keeps marker constant screen size */}
-      <div
+      <motion.div
+        ref={tokenRef}
+        drag={!disabled}
+        dragMomentum={false}
+        dragElastic={0}
+        onDragStart={handleDragStart}
+        onDrag={handleDrag}
+        onDragEnd={handleDragEnd}
+        whileDrag={{
+          boxShadow: dragShadowPlaced(variant),
+          zIndex: 50,
+        }}
+        whileTap={disabled ? undefined : tapScale}
+        transition={springTransition}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-label={`${isSelf ? "Your" : `${label}'s`} token — placed on graph`}
+        className="cursor-default"
         style={{
-          transform: "scale(calc(1 / var(--graph-scale, 1)))",
-          transformOrigin: "center",
+          position: "relative",
+          width: hitSize,
+          height: hitSize,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
         }}
       >
-        {/* Layer 3: drag behavior + visual content */}
-        <motion.div
-          ref={tokenRef}
-          drag={!disabled}
-          dragMomentum={false}
-          dragElastic={0}
-          onDragStart={handleDragStart}
-          onDrag={handleDrag}
-          onDragEnd={handleDragEnd}
-          whileDrag={{
-            boxShadow: isSelf
-              ? "0 0 0 6px rgba(249,135,78,0.4), 0 4px 16px rgba(0,0,0,0.2)"
-              : "0 0 0 6px rgba(98,126,248,0.4), 0 4px 16px rgba(0,0,0,0.2)",
-            zIndex: 50,
-          }}
-          whileTap={disabled ? undefined : tapScale}
-          transition={springTransition}
-          role="button"
-          tabIndex={disabled ? -1 : 0}
-          aria-label={`${isSelf ? "Your" : `${label}'s`} token — placed on graph`}
-          className="cursor-default"
+        {/* Dot */}
+        <div
+          className={`rounded-full ${colorClass} shadow-sm`}
+          style={{ width: dotSize, height: dotSize }}
+        />
+
+        {/* External label */}
+        <span
+          className="font-body font-medium text-foreground bg-white/80 rounded select-none leading-tight"
           style={{
-            position: "relative",
-            width: HIT_SIZE,
-            height: HIT_SIZE,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
+            fontSize: labelFontSize,
+            paddingLeft: labelPadX,
+            paddingRight: labelPadX,
+            paddingTop: labelPadY,
+            paddingBottom: labelPadY,
+            ...labelStyle(labelAnchor, hitSize, labelOffset),
           }}
         >
-          {/* Dot */}
-          <div
-            className={`rounded-full ${colorClass} shadow-sm`}
-            style={{ width: DOT_SIZE, height: DOT_SIZE }}
-          />
-
-          {/* External label */}
-          <span
-            className="font-body text-[13px] font-medium text-foreground bg-white/80 rounded px-1.5 py-0.5 select-none leading-tight"
-            style={labelStyle(labelAnchor)}
-          >
-            {label}
-          </span>
-        </motion.div>
-      </div>
+          {label}
+        </span>
+      </motion.div>
     </motion.div>
   );
 }

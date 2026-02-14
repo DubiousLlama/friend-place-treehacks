@@ -21,6 +21,12 @@ interface GameDashboardProps {
   onPlayersChanged: () => void;
   /** Called when user wants to release their claimed name */
   onUnclaim: () => void;
+  /** Called when user wants to change their display name (same identity) */
+  onEditName: (newName: string) => void | Promise<void>;
+  /** Whether the current user is the game host (creator) */
+  isHost: boolean;
+  /** Called when the host ends the game */
+  onEndGame: () => void;
 }
 
 export function GameDashboard({
@@ -32,11 +38,18 @@ export function GameDashboard({
   onContinuePlacing,
   onPlayersChanged,
   onUnclaim,
+  onEditName,
+  isHost,
+  onEndGame,
 }: GameDashboardProps) {
   const [copySuccess, setCopySuccess] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [addError, setAddError] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
+  const [editNameError, setEditNameError] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   const supabase = createClient();
 
@@ -89,6 +102,21 @@ export function GameDashboard({
     setAddingPlayer(false);
   };
 
+  const handleSaveEditName = async () => {
+    const name = editNameValue.trim();
+    if (!name) return;
+    setSavingName(true);
+    setEditNameError("");
+    try {
+      await onEditName(name);
+      setEditingName(false);
+      setEditNameValue("");
+    } catch (err) {
+      setEditNameError(err instanceof Error ? err.message : "Failed to update name.");
+    }
+    setSavingName(false);
+  };
+
   const deadline = game.submissions_lock_at
     ? new Date(game.submissions_lock_at)
     : null;
@@ -96,16 +124,16 @@ export function GameDashboard({
   const isExpired = deadline && deadline < now;
 
   return (
-    <div className="max-w-lg mx-auto rounded-2xl border border-[var(--border)] bg-[var(--white)] p-6 shadow-sm">
+    <div className="max-w-lg mx-auto rounded-2xl border border-surface-muted bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-8">
         {/* Status prompt */}
-        <div className="rounded-xl bg-[#FFF5EF] border border-[var(--splash)]/20 p-5">
+        <div className="rounded-xl bg-[#FFF5EF] border border-splash/20 p-5">
           {guessedCount === totalFriends && totalFriends > 0 ? (
             <>
-              <h2 className="font-semibold text-[var(--black)] mb-1">
+              <h2 className="font-semibold text-black mb-1">
                 You&apos;re all set!
               </h2>
-              <p className="text-sm text-[var(--secondary)]">
+              <p className="text-sm text-secondary">
                 Placed {guessedCount} of {totalFriends} friend
                 {totalFriends !== 1 ? "s" : ""}. Add more people below or share
                 the link so others can join.
@@ -113,11 +141,11 @@ export function GameDashboard({
             </>
           ) : (
             <>
-              <h2 className="font-semibold text-[var(--black)] mb-1">
+              <h2 className="font-semibold text-black mb-1">
                 Placed {guessedCount} of {totalFriends} friend
                 {totalFriends !== 1 ? "s" : ""}
               </h2>
-              <p className="text-sm text-[var(--secondary)]">
+              <p className="text-sm text-secondary">
                 {unguessedCount > 0
                   ? `You still have ${unguessedCount} friend${unguessedCount !== 1 ? "s" : ""} to place. Come back whenever you're ready.`
                   : "Add more people below, or share the link so others can join."}
@@ -125,15 +153,79 @@ export function GameDashboard({
             </>
           )}
           <p className="text-xs text-[var(--secondary)] mt-2">
-            Not {mySlot.display_name}?{" "}
-            <button
-              type="button"
-              onClick={onUnclaim}
-              className="underline hover:text-[var(--splash)] transition-colors"
-            >
-              Switch name
-            </button>
+            {editingName ? (
+              <span className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={editNameValue}
+                  onChange={(e) => {
+                    setEditNameValue(e.target.value);
+                    setEditNameError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSaveEditName();
+                    }
+                    if (e.key === "Escape") {
+                      setEditingName(false);
+                      setEditNameValue("");
+                      setEditNameError("");
+                    }
+                  }}
+                  placeholder="Display name"
+                  maxLength={50}
+                  className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--black)] w-32"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveEditName}
+                  disabled={savingName || !editNameValue.trim()}
+                  className="text-xs font-medium text-[var(--splash)] hover:underline disabled:opacity-50"
+                >
+                  {savingName ? "Saving..." : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingName(false);
+                    setEditNameValue("");
+                    setEditNameError("");
+                  }}
+                  className="text-xs text-[var(--secondary)] hover:underline"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditNameValue(mySlot.display_name);
+                    setEditingName(true);
+                    setEditNameError("");
+                  }}
+                  className="underline hover:text-[var(--splash)] transition-colors"
+                >
+                  Edit name
+                </button>
+                {" · "}
+                Not {mySlot.display_name}?{" "}
+                <button
+                  type="button"
+                  onClick={onUnclaim}
+                  className="underline hover:text-[var(--splash)] transition-colors"
+                >
+                  Switch name
+                </button>
+              </>
+            )}
           </p>
+          {editNameError && (
+            <p className="text-xs text-red-500 mt-1">{editNameError}</p>
+          )}
         </div>
 
         {/* Continue placing button */}
@@ -141,7 +233,7 @@ export function GameDashboard({
           <button
             type="button"
             onClick={onContinuePlacing}
-            className="w-full rounded-xl bg-[var(--splash)] text-[var(--white)] py-3 font-semibold hover:opacity-90 transition-opacity"
+            className="w-full rounded-xl bg-splash text-white py-3 font-semibold hover:opacity-90 transition-opacity"
           >
             Continue placing ({unguessedCount} remaining)
           </button>
@@ -149,7 +241,7 @@ export function GameDashboard({
 
         {/* Add players */}
         <div>
-          <h2 className="text-sm font-semibold text-[var(--black)] mb-2">
+          <h2 className="text-sm font-semibold text-black mb-2">
             Add players
           </h2>
           <div className="flex gap-2 min-w-0">
@@ -165,13 +257,13 @@ export function GameDashboard({
               }}
               placeholder="Friend's name"
               maxLength={50}
-              className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
+              className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
             />
             <button
               type="button"
               onClick={handleAddPlayer}
               disabled={addingPlayer || !newPlayerName.trim()}
-              className="shrink-0 rounded-lg bg-[var(--black)] text-[var(--white)] px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="shrink-0 rounded-lg bg-black text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {addingPlayer ? "Adding..." : "Add"}
             </button>
@@ -179,7 +271,7 @@ export function GameDashboard({
           {addError && (
             <p className="text-xs text-red-500 mt-1">{addError}</p>
           )}
-          <p className="text-xs text-[var(--secondary)] mt-2">
+          <p className="text-xs text-secondary mt-2">
             New names appear as unclaimed slots. Share the link so they can
             claim their name, or go to the graph to place them.
           </p>
@@ -188,7 +280,7 @@ export function GameDashboard({
             <button
               type="button"
               onClick={onContinuePlacing}
-              className="mt-3 w-full rounded-xl border border-[var(--splash)] text-[var(--splash)] py-2.5 text-sm font-semibold hover:bg-[#FFF5EF] transition-colors"
+              className="mt-3 w-full rounded-xl border border-splash text-splash py-2.5 text-sm font-semibold hover:bg-[#FFF5EF] transition-colors"
             >
               Go to graph
             </button>
@@ -197,7 +289,7 @@ export function GameDashboard({
 
         {/* Invite link */}
         <div>
-          <h2 className="text-sm font-semibold text-[var(--black)] mb-2">
+          <h2 className="text-sm font-semibold text-black mb-2">
             Invite link
           </h2>
           <div className="flex gap-2 min-w-0">
@@ -205,12 +297,12 @@ export function GameDashboard({
               type="text"
               readOnly
               value={shareUrl}
-              className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--white)] px-3 py-2 text-sm text-[var(--black)] font-mono truncate"
+              className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-white px-3 py-2 text-sm text-black font-mono truncate"
             />
             <button
               type="button"
               onClick={handleCopyLink}
-              className="shrink-0 rounded-lg bg-[var(--black)] text-[var(--white)] px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+              className="shrink-0 rounded-lg bg-black text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
             >
               {copySuccess ? "Copied!" : "Copy"}
             </button>
@@ -219,7 +311,7 @@ export function GameDashboard({
 
         {/* Player list */}
         <div>
-          <h2 className="text-sm font-semibold text-[var(--black)] mb-3">
+          <h2 className="text-sm font-semibold text-black mb-3">
             Players ({gamePlayers.length})
           </h2>
           <ul className="space-y-2">
@@ -233,27 +325,33 @@ export function GameDashboard({
               if (isMe) {
                 if (guessedCount === totalFriends && totalFriends > 0) {
                   statusText = `${guessedCount}/${totalFriends} placed`;
-                  statusColor = "text-[var(--splash)]";
+                  statusColor = "text-splash";
                 } else if (guessedCount > 0) {
                   statusText = `${guessedCount}/${totalFriends} placed`;
-                  statusColor = "text-[var(--accent)]";
+                  statusColor = "text-accent";
                 } else if (hasPlaced) {
                   statusText = "Self placed";
-                  statusColor = "text-[var(--accent)]";
+                  statusColor = "text-accent";
                 } else {
                   statusText = "Joined";
-                  statusColor = "text-[var(--secondary)]";
+                  statusColor = "text-secondary";
                 }
               } else {
-                // For other players, use the stored flags
-                statusText = hasPlaced
-                  ? gp.has_submitted ? "Submitted" : "Placed"
-                  : "Joined";
-                statusColor = hasPlaced
-                  ? "text-[var(--splash)]"
-                  : gp.has_submitted
-                    ? "text-[var(--accent)]"
-                    : "text-[var(--secondary)]";
+                // For other players, show guess count progress
+                const theirTotal = gamePlayers.filter((g) => g.id !== gp.id).length;
+                const theirCount = gp.guesses_count ?? 0;
+                if (theirCount > 0) {
+                  statusText = `${theirCount}/${theirTotal} placed`;
+                  statusColor = theirCount === theirTotal
+                    ? "text-splash"
+                    : "text-accent";
+                } else if (hasPlaced) {
+                  statusText = "Self placed";
+                  statusColor = "text-accent";
+                } else {
+                  statusText = "Joined";
+                  statusColor = "text-secondary";
+                }
               }
 
               return (
@@ -261,14 +359,14 @@ export function GameDashboard({
                   key={gp.id}
                   className="flex items-center justify-between text-sm"
                 >
-                  <span className="flex items-center gap-2 text-[var(--black)]">
+                  <span className="flex items-center gap-2 text-black">
                     <span
-                      className={`size-2 rounded-full ${hasPlaced ? "bg-[var(--splash)]" : "bg-[var(--accent)]"}`}
+                      className={`size-2 rounded-full ${hasPlaced ? "bg-splash" : "bg-accent"}`}
                       aria-hidden
                     />
                     {gp.display_name}
                     {isMe && (
-                      <span className="text-xs text-[var(--secondary)]">
+                      <span className="text-xs text-secondary">
                         (you)
                       </span>
                     )}
@@ -284,21 +382,21 @@ export function GameDashboard({
                 key={gp.id}
                 className="flex items-center justify-between text-sm"
               >
-                <span className="flex items-center gap-2 text-[var(--secondary)]">
+                <span className="flex items-center gap-2 text-secondary">
                   <span
-                    className="size-2 rounded-full bg-[var(--border)]"
+                    className="size-2 rounded-full bg-surface-muted"
                     aria-hidden
                   />
                   {gp.display_name}
                 </span>
-                <span className="text-xs text-[var(--secondary)]">
+                <span className="text-xs text-secondary">
                   Unclaimed
                 </span>
               </li>
             ))}
           </ul>
           {!allClaimed && (
-            <p className="mt-3 text-xs text-[var(--secondary)]">
+            <p className="mt-3 text-xs text-secondary">
               {unclaimedSlots.length} name
               {unclaimedSlots.length !== 1 ? "s" : ""} still waiting to be
               claimed.
@@ -309,10 +407,10 @@ export function GameDashboard({
         {/* Game deadline */}
         {deadline && (
           <div>
-            <h2 className="text-sm font-semibold text-[var(--black)] mb-1">
+            <h2 className="text-sm font-semibold text-black mb-1">
               Game ends
             </h2>
-            <p className="text-sm text-[var(--secondary)]">
+            <p className="text-sm text-secondary">
               {isExpired ? (
                 <span className="text-red-500 font-medium">
                   Game has ended.
@@ -322,10 +420,27 @@ export function GameDashboard({
               )}
             </p>
             {game.end_early_when_complete && !isExpired && (
-              <p className="text-xs text-[var(--secondary)] mt-1">
+              <p className="text-xs text-secondary mt-1">
                 May end early if everyone places.
               </p>
             )}
+          </div>
+        )}
+
+        {/* Host: End Game button */}
+        {isHost && (
+          <div className="pt-2 border-t border-[var(--border)]">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("End the game and reveal results? This can't be undone.")) {
+                  onEndGame();
+                }
+              }}
+              className="w-full rounded-xl border border-red-300 text-red-600 py-2.5 text-sm font-semibold hover:bg-red-50 transition-colors"
+            >
+              End game &amp; reveal results
+            </button>
           </div>
         )}
       </div>

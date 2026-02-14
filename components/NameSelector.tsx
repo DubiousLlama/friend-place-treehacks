@@ -99,12 +99,12 @@ export function NameSelector({
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--white)] p-6 flex flex-col gap-5">
+      <div className="w-full max-w-sm rounded-xl border border-surface-muted bg-white p-6 flex flex-col gap-5">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--black)] mb-1">
+          <h1 className="text-xl font-semibold text-black mb-1">
             Who are you?
           </h1>
-          <p className="text-sm text-[var(--secondary)]">
+          <p className="text-sm text-secondary">
             Pick your name from the list to join the game.
           </p>
         </div>
@@ -118,12 +118,12 @@ export function NameSelector({
                 type="button"
                 onClick={() => handleClaim(slot.id)}
                 disabled={claiming}
-                className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left hover:border-[var(--splash)] hover:bg-[#FFF5EF] disabled:opacity-50 transition-colors"
+                className="flex items-center justify-between rounded-lg border border-surface-muted bg-surface px-4 py-3 text-left hover:border-splash hover:bg-[#FFF5EF] disabled:opacity-50 transition-colors"
               >
-                <span className="font-medium text-[var(--black)]">
+                <span className="font-medium text-black">
                   {slot.display_name}
                 </span>
-                <span className="text-xs text-[var(--secondary)]">
+                <span className="text-xs text-secondary">
                   {claiming ? "Claiming..." : "That\u2019s me"}
                 </span>
               </button>
@@ -132,16 +132,16 @@ export function NameSelector({
         )}
 
         {unclaimedSlots.length === 0 && !addingNew && (
-          <p className="text-sm text-[var(--secondary)]">
+          <p className="text-sm text-secondary">
             All names have been claimed.
           </p>
         )}
 
         {/* Divider */}
-        <div className="flex items-center gap-3 text-xs text-[var(--secondary)]">
-          <div className="flex-1 h-px bg-[var(--border)]" />
+        <div className="flex items-center gap-3 text-xs text-secondary">
+          <div className="flex-1 h-px bg-surface-muted" />
           or
-          <div className="flex-1 h-px bg-[var(--border)]" />
+          <div className="flex-1 h-px bg-surface-muted" />
         </div>
 
         {/* Add new player */}
@@ -149,7 +149,7 @@ export function NameSelector({
           <button
             type="button"
             onClick={() => setAddingNew(true)}
-            className="rounded-lg border border-dashed border-[var(--border)] px-4 py-3 text-sm text-[var(--secondary)] hover:border-[var(--splash)] hover:text-[var(--splash)] transition-colors"
+            className="rounded-lg border border-dashed border-surface-muted px-4 py-3 text-sm text-secondary hover:border-splash hover:text-splash transition-colors"
           >
             + I&apos;m not on the list — add myself
           </button>
@@ -162,13 +162,13 @@ export function NameSelector({
               placeholder="Your name"
               maxLength={50}
               autoFocus
-              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--black)] placeholder:text-[var(--secondary)]"
+              className="rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
             />
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={claiming || !newName.trim()}
-                className="flex-1 rounded-lg bg-[var(--splash)] text-[var(--white)] py-2 text-sm font-medium disabled:opacity-60"
+                className="flex-1 rounded-lg bg-splash text-white py-2 text-sm font-medium disabled:opacity-60"
               >
                 {claiming ? "Joining..." : "Join game"}
               </button>
@@ -178,7 +178,7 @@ export function NameSelector({
                   setAddingNew(false);
                   setNewName("");
                 }}
-                className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm text-[var(--secondary)]"
+                className="rounded-lg border border-surface-muted px-3 py-2 text-sm text-secondary"
               >
                 Cancel
               </button>

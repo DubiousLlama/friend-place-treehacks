@@ -7,13 +7,13 @@ todos:
     status: completed
   - id: phase-2-lobby
     content: "Phase 2: Build game creation form (axes + player names + end time), name-claiming join flow, share link, Realtime subscriptions"
-    status: pending
+    status: completed
   - id: phase-3-graph
     content: "Phase 3: Build the 2D graph with pan/zoom, draggable player tokens, friend token tray, and gamefeel polish"
-    status: pending
+    status: completed
   - id: phase-4-submit
     content: "Phase 4: Build submission API, time-based + early-end game completion, scoring algorithm"
-    status: pending
+    status: in_progress
   - id: phase-5-results
     content: "Phase 5: Build results UI — scoreboard, animated placement reveal, accuracy visualization, account creation prompt"
     status: pending
@@ -26,6 +26,15 @@ isProject: false
 # Friend Place — Full Build Plan
 
 We’re building a daily online game in the style of wordle, except it is about connecting with your friends.
+
+## Current implementation (as of feature/host-controls)
+
+- **Phases 2-3 done:** Game creation, name claiming, 2D graph with pan/zoom, token tray, self + friend placement, partial submit (delete + re-insert guesses), re-entry to continue placing. Realtime on `game_players` and `games`.
+- **Name identity:** Token shows user display name (not "YOU"). **Edit name** updates `display_name` for same slot; **Switch name** unclaims slot and returns to name picker. RLS allows unclaim via migration `20260214200000_allow_unclaim.sql`.
+- **Host controls:** Creator can **end game** (set `phase = 'results'`) from dashboard and game info panel. RLS: "Creator can update game". Everyone sees **placement counts** per player (`game_players.guesses_count`); migration `20260214300000_host_controls.sql` adds column and games UPDATE policy.
+- **Phase 4 partial:** Submit is client-side (no API submit route). Host can end game manually; no cron for time-based end. Scoring not implemented.
+
+---
 
 Users can form a game and invite others. The game features a 2d graph with two silly axes (i.e. Gimli to Legolas and Muffin to Pancake). Each player sets their name, then puts themselves on the graph. Then, they place each of their friends who are also in the game.
 
@@ -127,6 +136,7 @@ erDiagram
         float self_x
         float self_y
         boolean has_submitted
+        integer guesses_count
         float score
         timestamp claimed_at
     }
@@ -164,12 +174,12 @@ Key design decisions:
 
 RLS is critical since clients talk directly to Supabase:
 
-- `**games**`: Anyone can `SELECT` (read game info). Only authenticated users can `INSERT` (create games, must set `created_by = auth.uid()`).
+- `**games**`: Anyone can `SELECT`. Authenticated users can `INSERT` (create games, `created_by = auth.uid()`). **Creator can `UPDATE`** (e.g. set `phase = 'results'` to end game) via policy "Creator can update game".
 - `**game_players**`:
   - `SELECT`: Anyone authenticated can read all game player rows.
-  - `INSERT`: The game creator can insert rows with `player_id IS NULL` (pre-populating name slots at game creation). Any authenticated user can insert a row with `player_id = auth.uid()` (the "+ add player" mid-game flow).
-  - `UPDATE`: A player can claim an unclaimed row (set `player_id` to their `auth.uid()` where `player_id IS NULL`). A player can update their own claimed row (`player_id = auth.uid()`) for self-placement, display name changes, and submission.
-- `**guesses**`: Players can `INSERT` and `UPDATE` their own guesses (where `guesser_game_player_id` points to a `game_players` row they own). Players can only `SELECT` guesses in games that are in `results` phase (prevents peeking).
+  - `INSERT`: Creator can insert unclaimed name slots; any authenticated user can insert a row with `player_id = auth.uid()` ("+ add player").
+  - `UPDATE`: Claim unclaimed row, or update own row (self-placement, display name, submission, `guesses_count`). **Unclaim:** policy allows setting `player_id = NULL` on own row (migration `20260214200000_allow_unclaim.sql`).
+- `**guesses**`: Players can `INSERT`, `UPDATE`, and **`DELETE`** their own guesses (for replace-all on submit). Players can `SELECT` their own guesses during placing (for re-entry) or all guesses in `results` phase. See migration `20260214100000_fix_guesses_rls.sql`.
 - Service-role key bypasses RLS for scoring and phase transitions in API routes.
 
 ---
