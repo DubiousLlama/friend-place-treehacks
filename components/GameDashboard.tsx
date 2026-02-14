@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { shareOrCopy } from "@/lib/utils";
 import type { Database } from "@/lib/types/database";
 
 type Game = Database["public"]["Tables"]["games"]["Row"];
@@ -42,7 +43,7 @@ export function GameDashboard({
   isHost,
   onEndGame,
 }: GameDashboardProps) {
-  const [copySuccess, setCopySuccess] = useState(false);
+  const [shareStatus, setShareStatus] = useState<"idle" | "shared" | "copied">("idle");
   const [newPlayerName, setNewPlayerName] = useState("");
   const [addingPlayer, setAddingPlayer] = useState(false);
   const [addError, setAddError] = useState("");
@@ -66,16 +67,14 @@ export function GameDashboard({
   const unclaimedSlots = gamePlayers.filter((gp) => gp.player_id === null);
   const allClaimed = unclaimedSlots.length === 0;
 
-  const handleCopyLink = async () => {
+  const handleShare = useCallback(async () => {
     if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    } catch {
-      /* user can copy manually */
+    const result = await shareOrCopy(shareUrl);
+    if (result === "shared" || result === "copied") {
+      setShareStatus(result);
+      setTimeout(() => setShareStatus("idle"), 2000);
     }
-  };
+  }, [shareUrl]);
 
   const handleAddPlayer = async () => {
     const name = newPlayerName.trim();
@@ -287,26 +286,35 @@ export function GameDashboard({
           )}
         </div>
 
-        {/* Invite link */}
+        {/* Share invite */}
         <div>
-          <h2 className="text-sm font-semibold text-black mb-2">
-            Invite link
-          </h2>
-          <div className="flex gap-2 min-w-0">
-            <input
-              type="text"
-              readOnly
-              value={shareUrl}
-              className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-white px-3 py-2 text-sm text-black font-mono truncate"
-            />
-            <button
-              type="button"
-              onClick={handleCopyLink}
-              className="shrink-0 rounded-lg bg-black text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+          <button
+            type="button"
+            onClick={handleShare}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-black text-white py-3 text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            {/* Share icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              {copySuccess ? "Copied!" : "Copy"}
-            </button>
-          </div>
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+              <polyline points="16 6 12 2 8 6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+            {shareStatus === "copied"
+              ? "Link copied!"
+              : shareStatus === "shared"
+                ? "Shared!"
+                : "Share invite"}
+          </button>
         </div>
 
         {/* Player list */}

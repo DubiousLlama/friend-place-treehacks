@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { shareOrCopy } from "@/lib/utils";
 import type { Game, GamePlayer } from "@/lib/game-types";
 
 interface GameInfoPanelProps {
@@ -37,7 +38,7 @@ export function GameInfoPanel({
   onEndGame,
 }: GameInfoPanelProps) {
   const [open, setOpen] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
+  const [shareStatus, setShareStatus] = useState<"idle" | "shared" | "copied">("idle");
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
   const [editNameError, setEditNameError] = useState("");
@@ -56,16 +57,14 @@ export function GameInfoPanel({
     : null;
   const isExpired = deadline ? deadline < new Date() : false;
 
-  const handleCopyLink = async () => {
+  const handleShare = useCallback(async () => {
     if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    } catch {
-      /* user can copy manually */
+    const result = await shareOrCopy(shareUrl);
+    if (result === "shared" || result === "copied") {
+      setShareStatus(result);
+      setTimeout(() => setShareStatus("idle"), 2000);
     }
-  };
+  }, [shareUrl]);
 
   const handleSaveEditName = async () => {
     const name = editNameValue.trim();
@@ -123,26 +122,35 @@ export function GameInfoPanel({
             className="overflow-hidden"
           >
             <div className="mx-auto max-w-lg bg-white border border-t-0 border-secondary/10 rounded-b-2xl shadow-lg p-5 flex flex-col gap-5">
-              {/* Invite link */}
+              {/* Share invite */}
               <div>
-                <h3 className="text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">
-                  Invite link
-                </h3>
-                <div className="flex gap-2 min-w-0">
-                  <input
-                    type="text"
-                    readOnly
-                    value={shareUrl}
-                    className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-1.5 text-xs text-black font-mono truncate"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    className="shrink-0 rounded-lg bg-black text-white px-3 py-1.5 text-xs font-medium hover:opacity-90 transition-opacity"
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-black text-white py-2 text-xs font-semibold hover:opacity-90 transition-opacity"
+                >
+                  {/* Share icon */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    {copySuccess ? "Copied!" : "Copy"}
-                  </button>
-                </div>
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                    <polyline points="16 6 12 2 8 6" />
+                    <line x1="12" y1="2" x2="12" y2="15" />
+                  </svg>
+                  {shareStatus === "copied"
+                    ? "Link copied!"
+                    : shareStatus === "shared"
+                      ? "Shared!"
+                      : "Share invite"}
+                </button>
               </div>
 
               {/* Players */}
