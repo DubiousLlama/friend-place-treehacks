@@ -98,6 +98,7 @@ export type Database = {
           has_submitted: boolean;
           score: number | null;
           claimed_at: string | null;
+          guesses_count: number;
         };
         Insert: {
           id?: string;
@@ -109,6 +110,7 @@ export type Database = {
           has_submitted?: boolean;
           score?: number | null;
           claimed_at?: string | null;
+          guesses_count?: number;
         };
         Update: {
           id?: string;
@@ -120,6 +122,7 @@ export type Database = {
           has_submitted?: boolean;
           score?: number | null;
           claimed_at?: string | null;
+          guesses_count?: number;
         };
         Relationships: [
           {

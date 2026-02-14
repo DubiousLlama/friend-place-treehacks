@@ -164,13 +164,14 @@ export default function PlayPage() {
       );
       if (!mySlot) return;
 
-      // 1. Update self placement
+      // 1. Update self placement + guesses count
       const { error: selfErr } = await supabase
         .from("game_players")
         .update({
           self_x: selfPosition.x,
           self_y: selfPosition.y,
           has_submitted: true,
+          guesses_count: guesses.length,
         })
         .eq("id", mySlot.id);
 
@@ -245,6 +246,57 @@ export default function PlayPage() {
     setView("graph");
     await fetchAll();
   }, [game, currentPlayerId, gamePlayers, supabase, fetchAll]);
+
+  // ---- End game handler: host transitions to results phase ----
+
+  const handleEndGame = useCallback(async () => {
+    if (!game || !currentPlayerId) return;
+    if (game.created_by !== currentPlayerId) return;
+
+    const { error } = await supabase
+      .from("games")
+      .update({ phase: "results" as const })
+      .eq("id", game.id);
+
+    if (error) {
+      console.error("Failed to end game:", error);
+    } else {
+      // Realtime subscription will update the game state automatically,
+      // but also refresh to be safe
+      await fetchAll();
+    }
+  }, [game, currentPlayerId, supabase, fetchAll]);
+
+  // ---- Edit display name: same slot, update label only ----
+
+  const handleEditDisplayName = useCallback(
+    async (newName: string) => {
+      const trimmed = newName.trim();
+      if (!game || !currentPlayerId || !trimmed) return;
+
+      const mySlot = gamePlayers.find(
+        (gp) => gp.player_id === currentPlayerId
+      );
+      if (!mySlot) return;
+
+      const { error } = await supabase
+        .from("game_players")
+        .update({ display_name: trimmed })
+        .eq("id", mySlot.id);
+
+      if (error) {
+        if (error.code === "23505") {
+          throw new Error("That name is already in the game.");
+        }
+        throw new Error("Failed to update name.");
+      }
+      await fetchAll();
+    },
+    [game, currentPlayerId, gamePlayers, supabase, fetchAll]
+  );
+
+  // Is the current user the game host?
+  const isHost = game?.created_by === currentPlayerId;
 
   // ---- Render states ----
 
@@ -339,6 +391,9 @@ export default function PlayPage() {
             inviteCode={inviteCode}
             guessedCount={guessedCount}
             onUnclaim={handleUnclaim}
+            onEditName={handleEditDisplayName}
+            isHost={isHost}
+            onEndGame={handleEndGame}
           />
         </div>
 
@@ -384,6 +439,9 @@ export default function PlayPage() {
           fetchAll();
         }}
         onUnclaim={handleUnclaim}
+        onEditName={handleEditDisplayName}
+        isHost={isHost}
+        onEndGame={handleEndGame}
       />
     </div>
   );

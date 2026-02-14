@@ -9,27 +9,17 @@ import type { Position } from "@/lib/game-types";
  * in the returned rect, so no additional scale/pan math is needed.
  *
  * Y is inverted so that 0 = bottom, 1 = top (matching typical graph convention).
- *
- * `insetPx` (optional, default 0) — pixel inset from each edge. When set,
- * the returned position is clamped so that a circle of this radius stays
- * fully inside the graph. Pass `DOT_SIZE / 2` to keep dots visible.
  */
 export function pixelToNormalized(
   pixelX: number,
   pixelY: number,
-  graphRect: DOMRect,
-  insetPx = 0
+  graphRect: DOMRect
 ): Position {
   const relX = (pixelX - graphRect.left) / graphRect.width;
   const relY = (pixelY - graphRect.top) / graphRect.height;
-
-  // Compute normalized inset so the dot center stays far enough from the edge
-  const insetX = graphRect.width > 0 ? insetPx / graphRect.width : 0;
-  const insetY = graphRect.height > 0 ? insetPx / graphRect.height : 0;
-
   return {
-    x: Math.max(insetX, Math.min(1 - insetX, relX)),
-    y: Math.max(insetY, Math.min(1 - insetY, 1 - relY)),
+    x: Math.max(0, Math.min(1, relX)),
+    y: Math.max(0, Math.min(1, 1 - relY)), // invert Y so 0=bottom, 1=top
   };
 }
 

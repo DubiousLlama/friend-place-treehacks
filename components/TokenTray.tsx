@@ -3,14 +3,18 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { NamePlacement, Position } from "@/lib/game-types";
+import type { GraphSizeConfig } from "@/lib/sizes";
 import { PlayerToken } from "@/components/PlayerToken";
 import { staggerContainer, staggerItem } from "@/lib/motion";
+import { trayShadow } from "@/lib/theme";
 
 interface TokenTrayProps {
   friends: NamePlacement[];
   onPlace: (gamePlayerId: string, pos: Position) => void;
   onRemove: (gamePlayerId: string) => void;
   graphRef: React.RefObject<HTMLDivElement | null>;
+  /** Responsive size config forwarded to each PlayerToken */
+  sizes?: GraphSizeConfig;
 }
 
 export function TokenTray({
@@ -18,6 +22,7 @@ export function TokenTray({
   onPlace,
   onRemove,
   graphRef,
+  sizes,
 }: TokenTrayProps) {
   const unplaced = friends.filter((n) => n.position === null);
   const allPlaced = unplaced.length === 0;
@@ -44,7 +49,8 @@ export function TokenTray({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="bg-surface border-t border-secondary/10 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]"
+          className="bg-surface border-t border-secondary/10"
+          style={{ boxShadow: trayShadow }}
         >
           <motion.div
             className="flex gap-3 px-4 py-3 flex-wrap justify-center"
@@ -62,6 +68,7 @@ export function TokenTray({
                   onPlace={(pos) => onPlace(entry.gamePlayer.id, pos)}
                   onRemove={() => onRemove(entry.gamePlayer.id)}
                   graphRef={graphRef}
+                  sizes={sizes}
                 />
               </motion.div>
             ))}

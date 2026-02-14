@@ -1,13 +1,17 @@
 "use client";
 
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import type { Game, GamePlayer, Position, NamePlacement } from "@/lib/game-types";
-import { GameGraph } from "@/components/GameGraph";
+import { GameGraph, type TransformState } from "@/components/GameGraph";
 import { PlayerToken } from "@/components/PlayerToken";
 import { TokenTray } from "@/components/TokenTray";
 import { computeLabelAnchors } from "@/lib/label-placement";
 import { tapScale, hoverLift, springTransition } from "@/lib/motion";
+import { theme } from "@/lib/theme";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MOBILE_SIZES, DESKTOP_SIZES, toNormalizedSizes } from "@/lib/sizes";
+import type { PlacementSizes } from "@/lib/sizes";
 
 interface PlacingPhaseProps {
   game: Game;
@@ -40,6 +44,47 @@ export function PlacingPhase({
 }: PlacingPhaseProps) {
   const graphRef = useRef<HTMLDivElement | null>(null);
 
+  // ---- Responsive sizes ----
+  const isMobile = useIsMobile();
+  const sizeConfig = isMobile ? MOBILE_SIZES : DESKTOP_SIZES;
+
+  // Measure actual graph dimensions for accurate normalised placement sizes
+  const [graphDims, setGraphDims] = useState({ width: 350, height: 350 });
+
+  useEffect(() => {
+    const el = graphRef.current;
+    if (!el) return;
+
+    // Read initial size
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      setGraphDims({ width: rect.width, height: rect.height });
+    }
+
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        setGraphDims({ width, height });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Compute normalised sizes for the placement algorithm
+  const placementSizes: PlacementSizes = useMemo(
+    () => toNormalizedSizes(sizeConfig, graphDims.width, graphDims.height),
+    [sizeConfig, graphDims]
+  );
+
+  // ---- Zoom-aware padding ----
+  const [graphScale, setGraphScale] = useState(1);
+  const handleTransformChange = useCallback((t: TransformState) => {
+    setGraphScale(t.scale);
+  }, []);
+  const isZoomed = graphScale > 1.05;
+
+  // ---- State ----
   // If re-entering with an existing self position, start on step "others"
   const [step, setStep] = useState<Step>(
     initialSelfPosition ? "others" : "self"
@@ -82,14 +127,13 @@ export function PlacingPhase({
   // Can submit as long as self is placed (partial friend placement is OK)
   const canSubmit = step === "others" && selfPosition !== null;
 
-  // Handle self token placement
+  // ---- Handlers ----
   const handleSelfPlace = useCallback((pos: Position) => {
     setSelfPosition(pos);
     setSelfVersion((v) => v + 1);
     setStep("others");
   }, []);
 
-  // Handle other name token placement
   const handleOtherPlace = useCallback((gamePlayerId: string, pos: Position) => {
     setOtherPositions((prev) => {
       const next = new Map(prev);
@@ -103,7 +147,6 @@ export function PlacingPhase({
     });
   }, []);
 
-  // Handle other token removal (dragged off graph)
   const handleOtherRemove = useCallback((gamePlayerId: string) => {
     setOtherPositions((prev) => {
       const next = new Map(prev);
@@ -112,7 +155,6 @@ export function PlacingPhase({
     });
   }, []);
 
-  // Submit all placements (including re-placed friends)
   const handleSubmit = useCallback(() => {
     if (!selfPosition) return;
 
@@ -126,51 +168,44 @@ export function PlacingPhase({
     onSubmit(selfPosition, guesses);
   }, [selfPosition, namePlacements, onSubmit]);
 
-  // Placed others (rendered inside the graph)
+  // ---- Label placement ----
   const placedOthers = namePlacements.filter((n) => n.position !== null);
 
-  // Compute label anchor directions via collision avoidance algorithm
   const labelAnchors = useMemo(() => {
+    const { charWidth, padWidth } = placementSizes;
     const inputs: { id: string; position: Position; labelWidth: number }[] = [];
+
     if (selfPosition) {
-      inputs.push({ id: currentGamePlayerId, position: selfPosition, labelWidth: currentDisplayName.length * 0.02 });
+      inputs.push({
+        id: currentGamePlayerId,
+        position: selfPosition,
+        labelWidth: currentDisplayName.length * charWidth + padWidth,
+      });
     }
     for (const n of placedOthers) {
       if (n.position) {
         inputs.push({
           id: n.gamePlayer.id,
           position: n.position,
-          labelWidth: n.gamePlayer.display_name.length * 0.02,
+          labelWidth: n.gamePlayer.display_name.length * charWidth + padWidth,
         });
       }
     }
-    return computeLabelAnchors(inputs);
-  }, [selfPosition, placedOthers, currentGamePlayerId]);
+    return computeLabelAnchors(inputs, placementSizes);
+  }, [selfPosition, placedOthers, currentGamePlayerId, placementSizes]);
 
-  // Submit button label
-  const submitLabel = (() => {
-    if (placedCount === totalCount && totalCount > 0) {
-      return `Submit all ${totalCount} placement${totalCount !== 1 ? "s" : ""}`;
-    }
-    if (placedCount > 0) {
-      return `Submit ${placedCount} of ${totalCount} placed`;
-    }
-    return "Place friends, then submit";
-  })();
-
+  // ---- Render ----
   return (
     <LayoutGroup>
       <div className="flex flex-col h-full bg-surface">
         {/* Header: step indicator + instruction */}
         <div className="px-4 pt-4 pb-2">
-          {/* Step indicator pills */}
           <div className="flex items-center justify-center gap-2 mb-2">
             <StepPill active={step === "self"} label="1" />
             <div className="w-6 h-px bg-secondary/20" />
             <StepPill active={step === "others"} label="2" />
           </div>
 
-          {/* Instruction text */}
           <AnimatePresence mode="wait">
             <motion.p
               key={step}
@@ -196,14 +231,16 @@ export function PlacingPhase({
           )}
         </div>
 
-        {/* Graph area */}
-        <div className="flex-1 flex items-center justify-center px-4 py-2 min-h-0">
+        {/* Graph area — padding shrinks when zoomed to maximize space */}
+        <div className={`flex-1 flex items-center justify-center min-h-0 transition-[padding] duration-200 ${isZoomed ? "px-1 py-1" : "px-4 py-2"}`}>
           <GameGraph
             axisXLow={game.axis_x_label_low}
             axisXHigh={game.axis_x_label_high}
             axisYLow={game.axis_y_label_low}
             axisYHigh={game.axis_y_label_high}
             graphRef={graphRef}
+            sizes={sizeConfig}
+            onTransformChange={handleTransformChange}
           >
             {/* Self token — always editable */}
             {selfPosition !== null && (
@@ -216,10 +253,11 @@ export function PlacingPhase({
                 onPlace={handleSelfPlace}
                 graphRef={graphRef}
                 labelAnchor={labelAnchors.get(currentGamePlayerId)}
+                sizes={sizeConfig}
               />
             )}
 
-            {/* Placed name tokens on the graph (all editable) */}
+            {/* Placed name tokens */}
             {placedOthers.map((n) => (
               <PlayerToken
                 key={`${n.gamePlayer.id}-v${otherVersions.get(n.gamePlayer.id) ?? 0}`}
@@ -231,6 +269,7 @@ export function PlacingPhase({
                 onRemove={() => handleOtherRemove(n.gamePlayer.id)}
                 graphRef={graphRef}
                 labelAnchor={labelAnchors.get(n.gamePlayer.id)}
+                sizes={sizeConfig}
               />
             ))}
           </GameGraph>
@@ -250,12 +289,13 @@ export function PlacingPhase({
                 onPlace={handleOtherPlace}
                 onRemove={handleOtherRemove}
                 graphRef={graphRef}
+                sizes={sizeConfig}
               />
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Self-place hint — show in self step when token hasn't been placed */}
+        {/* Self-place hint */}
         <AnimatePresence>
           {step === "self" && selfPosition === null && (
             <motion.div
@@ -273,6 +313,7 @@ export function PlacingPhase({
                   position={null}
                   onPlace={handleSelfPlace}
                   graphRef={graphRef}
+                  sizes={sizeConfig}
                 />
                 <span className="font-body text-sm text-secondary">
                   Drag me onto the graph!
@@ -304,7 +345,11 @@ export function PlacingPhase({
                   }
                 `}
               >
-                {submitLabel}
+                {placedCount === totalCount && totalCount > 0
+                  ? `Submit all ${totalCount} placement${totalCount !== 1 ? "s" : ""}`
+                  : placedCount > 0
+                    ? `Submit ${placedCount} of ${totalCount} placed`
+                    : "Place friends, then submit"}
               </motion.button>
             )}
           </AnimatePresence>
@@ -319,8 +364,8 @@ function StepPill({ active, label }: { active: boolean; label: string }) {
   return (
     <motion.div
       animate={{
-        backgroundColor: active ? "#F9874E" : "#e5e5e7",
-        color: active ? "#ffffff" : "#66666e",
+        backgroundColor: active ? theme.splash : theme.surfaceMuted,
+        color: active ? theme.white : theme.secondary,
         scale: active ? 1 : 0.9,
       }}
       transition={springTransition}
