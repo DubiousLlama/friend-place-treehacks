@@ -13,6 +13,8 @@ interface PlacingPhaseProps {
   game: Game;
   /** The game_players.id of the current user's claimed slot */
   currentGamePlayerId: string;
+  /** The display name of the current user (shown on their token) */
+  currentDisplayName: string;
   /** ALL other players in the game (including previously guessed ones) */
   otherPlayers: GamePlayer[];
   /** Pre-existing self position (when re-entering after a previous submit) */
@@ -30,6 +32,7 @@ type Step = "self" | "others";
 export function PlacingPhase({
   game,
   currentGamePlayerId,
+  currentDisplayName,
   otherPlayers,
   initialSelfPosition = null,
   initialOtherPositions,
@@ -130,7 +133,7 @@ export function PlacingPhase({
   const labelAnchors = useMemo(() => {
     const inputs: { id: string; position: Position; labelWidth: number }[] = [];
     if (selfPosition) {
-      inputs.push({ id: currentGamePlayerId, position: selfPosition, labelWidth: "YOU".length * 0.02 });
+      inputs.push({ id: currentGamePlayerId, position: selfPosition, labelWidth: currentDisplayName.length * 0.02 });
     }
     for (const n of placedOthers) {
       if (n.position) {
@@ -207,7 +210,7 @@ export function PlacingPhase({
               <PlayerToken
                 key={`self-v${selfVersion}`}
                 id={currentGamePlayerId}
-                label="YOU"
+                label={currentDisplayName}
                 variant="self"
                 position={selfPosition}
                 onPlace={handleSelfPlace}
@@ -265,7 +268,7 @@ export function PlacingPhase({
               <div className="flex items-center justify-center gap-3 py-3">
                 <PlayerToken
                   id={currentGamePlayerId}
-                  label="YOU"
+                  label={currentDisplayName}
                   variant="self"
                   position={null}
                   onPlace={handleSelfPlace}

@@ -11,6 +11,8 @@ interface GameInfoPanelProps {
   inviteCode: string;
   /** How many friends the current user has guessed */
   guessedCount: number;
+  /** Called when user wants to release their claimed name */
+  onUnclaim: () => void;
 }
 
 /**
@@ -23,6 +25,7 @@ export function GameInfoPanel({
   mySlot,
   inviteCode,
   guessedCount,
+  onUnclaim,
 }: GameInfoPanelProps) {
   const [open, setOpen] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -162,7 +165,13 @@ export function GameInfoPanel({
                           />
                           {gp.display_name}
                           {isMe && (
-                            <span className="text-secondary">(you)</span>
+                            <button
+                              type="button"
+                              onClick={onUnclaim}
+                              className="text-secondary underline hover:text-splash transition-colors"
+                            >
+                              switch
+                            </button>
                           )}
                         </span>
                         <span className={statusColor}>

@@ -207,6 +207,45 @@ export default function PlayPage() {
     [game, currentPlayerId, gamePlayers, supabase, fetchAll]
   );
 
+  // ---- Unclaim handler: releases the user's claimed name slot ----
+
+  const handleUnclaim = useCallback(async () => {
+    if (!game || !currentPlayerId) return;
+
+    const mySlot = gamePlayers.find(
+      (gp) => gp.player_id === currentPlayerId
+    );
+    if (!mySlot) return;
+
+    // 1. Delete all guesses by this user
+    const { error: delErr } = await supabase
+      .from("guesses")
+      .delete()
+      .eq("game_id", game.id)
+      .eq("guesser_game_player_id", mySlot.id);
+
+    if (delErr) console.error("Failed to delete guesses on unclaim:", delErr);
+
+    // 2. Clear the slot — release ownership and reset placement data
+    const { error: updErr } = await supabase
+      .from("game_players")
+      .update({
+        player_id: null,
+        claimed_at: null,
+        self_x: null,
+        self_y: null,
+        has_submitted: false,
+      })
+      .eq("id", mySlot.id);
+
+    if (updErr) console.error("Failed to unclaim slot:", updErr);
+
+    // 3. Refresh — mySlot will become null, showing NameSelector
+    setMyGuesses([]);
+    setView("graph");
+    await fetchAll();
+  }, [game, currentPlayerId, gamePlayers, supabase, fetchAll]);
+
   // ---- Render states ----
 
   if (loading) {
@@ -299,6 +338,7 @@ export default function PlayPage() {
             mySlot={mySlot}
             inviteCode={inviteCode}
             guessedCount={guessedCount}
+            onUnclaim={handleUnclaim}
           />
         </div>
 
@@ -307,6 +347,7 @@ export default function PlayPage() {
           <PlacingPhase
             game={game}
             currentGamePlayerId={mySlot.id}
+            currentDisplayName={mySlot.display_name}
             otherPlayers={allFriends}
             initialSelfPosition={existingSelfPosition}
             initialOtherPositions={initialOtherPositions}
@@ -342,6 +383,7 @@ export default function PlayPage() {
         onPlayersChanged={() => {
           fetchAll();
         }}
+        onUnclaim={handleUnclaim}
       />
     </div>
   );

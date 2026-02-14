@@ -19,6 +19,8 @@ interface GameDashboardProps {
   onContinuePlacing: () => void;
   /** Called after a new player is added so the parent can refresh */
   onPlayersChanged: () => void;
+  /** Called when user wants to release their claimed name */
+  onUnclaim: () => void;
 }
 
 export function GameDashboard({
@@ -29,6 +31,7 @@ export function GameDashboard({
   guessedCount,
   onContinuePlacing,
   onPlayersChanged,
+  onUnclaim,
 }: GameDashboardProps) {
   const [copySuccess, setCopySuccess] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -121,6 +124,16 @@ export function GameDashboard({
               </p>
             </>
           )}
+          <p className="text-xs text-[var(--secondary)] mt-2">
+            Not {mySlot.display_name}?{" "}
+            <button
+              type="button"
+              onClick={onUnclaim}
+              className="underline hover:text-[var(--splash)] transition-colors"
+            >
+              Switch name
+            </button>
+          </p>
         </div>
 
         {/* Continue placing button */}

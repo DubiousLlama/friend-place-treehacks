@@ -165,6 +165,7 @@ export default function GraphDevPage() {
             key={key}
             game={game}
             currentGamePlayerId={CURRENT_GAME_PLAYER_ID}
+            currentDisplayName="You"
             otherPlayers={MOCK_OTHER_PLAYERS}
             onSubmit={handleSubmit}
           />
