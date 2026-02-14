@@ -45,9 +45,11 @@ export type Database = {
           axis_x_label_high: string;
           axis_y_label_low: string;
           axis_y_label_high: string;
-          phase: "lobby" | "placing" | "results";
+          phase: "placing" | "results";
           created_by: string;
           created_at: string;
+          submissions_lock_at: string | null;
+          end_early_when_complete: boolean;
         };
         Insert: {
           id?: string;
@@ -56,9 +58,11 @@ export type Database = {
           axis_x_label_high: string;
           axis_y_label_low: string;
           axis_y_label_high: string;
-          phase?: "lobby" | "placing" | "results";
+          phase?: "placing" | "results";
           created_by: string;
           created_at?: string;
+          submissions_lock_at?: string | null;
+          end_early_when_complete?: boolean;
         };
         Update: {
           id?: string;
@@ -67,9 +71,11 @@ export type Database = {
           axis_x_label_high?: string;
           axis_y_label_low?: string;
           axis_y_label_high?: string;
-          phase?: "lobby" | "placing" | "results";
+          phase?: "placing" | "results";
           created_by?: string;
           created_at?: string;
+          submissions_lock_at?: string | null;
+          end_early_when_complete?: boolean;
         };
         Relationships: [
           {
@@ -78,42 +84,42 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "players";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       game_players: {
         Row: {
           id: string;
           game_id: string;
-          player_id: string;
+          player_id: string | null;
           display_name: string;
           self_x: number | null;
           self_y: number | null;
           has_submitted: boolean;
           score: number | null;
-          joined_at: string;
+          claimed_at: string | null;
         };
         Insert: {
           id?: string;
           game_id: string;
-          player_id: string;
+          player_id?: string | null;
           display_name: string;
           self_x?: number | null;
           self_y?: number | null;
           has_submitted?: boolean;
           score?: number | null;
-          joined_at?: string;
+          claimed_at?: string | null;
         };
         Update: {
           id?: string;
           game_id?: string;
-          player_id?: string;
+          player_id?: string | null;
           display_name?: string;
           self_x?: number | null;
           self_y?: number | null;
           has_submitted?: boolean;
           score?: number | null;
-          joined_at?: string;
+          claimed_at?: string | null;
         };
         Relationships: [
           {
@@ -129,31 +135,31 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "players";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       guesses: {
         Row: {
           id: string;
           game_id: string;
-          guesser_id: string;
-          target_id: string;
+          guesser_game_player_id: string;
+          target_game_player_id: string;
           guess_x: number;
           guess_y: number;
         };
         Insert: {
           id?: string;
           game_id: string;
-          guesser_id: string;
-          target_id: string;
+          guesser_game_player_id: string;
+          target_game_player_id: string;
           guess_x: number;
           guess_y: number;
         };
         Update: {
           id?: string;
           game_id?: string;
-          guesser_id?: string;
-          target_id?: string;
+          guesser_game_player_id?: string;
+          target_game_player_id?: string;
           guess_x?: number;
           guess_y?: number;
         };
@@ -166,26 +172,26 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "guesses_guesser_id_fkey";
-            columns: ["guesser_id"];
+            foreignKeyName: "guesses_guesser_game_player_id_fkey";
+            columns: ["guesser_game_player_id"];
             isOneToOne: false;
-            referencedRelation: "players";
+            referencedRelation: "game_players";
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "guesses_target_id_fkey";
-            columns: ["target_id"];
+            foreignKeyName: "guesses_target_game_player_id_fkey";
+            columns: ["target_game_player_id"];
             isOneToOne: false;
-            referencedRelation: "players";
+            referencedRelation: "game_players";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
     Enums: {
-      game_phase: "lobby" | "placing" | "results";
+      game_phase: "placing" | "results";
     };
     CompositeTypes: Record<string, never>;
   };

@@ -3,25 +3,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { GameDashboard } from "@/components/Lobby";
+import { NameSelector } from "@/components/NameSelector";
+import { GameDashboard } from "@/components/GameDashboard";
 import type { Database } from "@/lib/types/database";
 
 type Game = Database["public"]["Tables"]["games"]["Row"];
+type GamePlayer = Database["public"]["Tables"]["game_players"]["Row"];
 
 export default function PlayPage() {
   const params = useParams();
   const inviteCode = params.inviteCode as string;
   const [game, setGame] = useState<Game | null>(null);
+  const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
-  const [isInGame, setIsInGame] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [joinName, setJoinName] = useState("");
-  const [joining, setJoining] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
 
   const supabase = createClient();
 
-  const fetchGameAndMembership = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     // Ensure session
     let {
       data: { user },
@@ -36,7 +35,7 @@ export default function PlayPage() {
     }
     setCurrentPlayerId(user.id);
 
-    // Fetch game by invite code
+    // Fetch game
     const { data: rawGame, error: gameErr } = await supabase
       .from("games")
       .select("*")
@@ -48,74 +47,86 @@ export default function PlayPage() {
       setLoading(false);
       return;
     }
-    const gameData = rawGame as Game;
-    setGame(gameData);
+    setGame(rawGame as Game);
 
-    // Check if user is already in the game
-    const { data: membership } = await supabase
+    // Fetch game players
+    const { data: players } = await supabase
       .from("game_players")
-      .select("id")
-      .eq("game_id", gameData.id)
-      .eq("player_id", user.id)
-      .maybeSingle();
+      .select("*")
+      .eq("game_id", (rawGame as Game).id)
+      .order("claimed_at", { ascending: true, nullsFirst: false });
 
-    setIsInGame(!!membership);
+    if (players) setGamePlayers(players as GamePlayer[]);
     setLoading(false);
   }, [inviteCode, supabase]);
 
   useEffect(() => {
-    fetchGameAndMembership();
-  }, [fetchGameAndMembership]);
+    fetchAll();
+  }, [fetchAll]);
 
-  const handleJoin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = joinName.trim() || "Player";
-    if (!currentPlayerId || !game) return;
-    setJoining(true);
-    setJoinError(null);
+  // Realtime: game_players changes (claims, new players, placements)
+  useEffect(() => {
+    if (!game?.id) return;
 
-    try {
-      // Ensure player row
-      await supabase
-        .from("players")
-        .upsert(
-          { id: currentPlayerId, display_name: name },
-          { onConflict: "id" }
-        );
-
-      // Insert into game_players
-      const { error } = await supabase.from("game_players").insert({
-        game_id: game.id,
-        player_id: currentPlayerId,
-        display_name: name,
-      });
-
-      if (error) {
-        if (error.code === "23505") {
-          // Already in game (duplicate key) — just proceed
-          setIsInGame(true);
-          return;
+    const channel = supabase
+      .channel(`play-players-${game.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "game_players",
+          filter: `game_id=eq.${game.id}`,
+        },
+        () => {
+          supabase
+            .from("game_players")
+            .select("*")
+            .eq("game_id", game.id)
+            .order("claimed_at", { ascending: true, nullsFirst: false })
+            .then(({ data }) => {
+              if (data) setGamePlayers(data as GamePlayer[]);
+            });
         }
-        setJoinError(error.message);
-        return;
-      }
+      )
+      .subscribe();
 
-      setIsInGame(true);
-    } catch (err) {
-      setJoinError(
-        err instanceof Error ? err.message : "Something went wrong"
-      );
-    } finally {
-      setJoining(false);
-    }
-  };
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [game?.id, supabase]);
 
-  // ---------- Render states ----------
+  // Realtime: game phase changes
+  useEffect(() => {
+    if (!game?.id) return;
+
+    const channel = supabase
+      .channel(`play-game-${game.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "games",
+          filter: `id=eq.${game.id}`,
+        },
+        (payload) => {
+          setGame(payload.new as Game);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [game?.id, supabase]);
+
+  // ---- Render states ----
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-zinc-500 dark:text-zinc-400">Loading…</p>
+        <p className="text-zinc-500 dark:text-zinc-400">Loading...</p>
       </div>
     );
   }
@@ -139,49 +150,35 @@ export default function PlayPage() {
     );
   }
 
-  // Join form — player is not yet in this game
-  if (!isInGame) {
+  // Has the current user claimed a name slot?
+  const mySlot = gamePlayers.find(
+    (gp) => gp.player_id === currentPlayerId
+  );
+
+  // Not claimed yet — show NameSelector
+  if (!mySlot) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center px-4">
-        <div className="w-full max-w-sm rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6">
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
-            Join the game
-          </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-            Enter your name, then place yourself and guess your friends.
-          </p>
-          <form onSubmit={handleJoin} className="flex flex-col gap-4">
-            <input
-              type="text"
-              value={joinName}
-              onChange={(e) => setJoinName(e.target.value)}
-              placeholder="Your name"
-              className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
-              maxLength={50}
-              autoFocus
-            />
-            <button
-              type="submit"
-              disabled={joining}
-              className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 py-2 font-medium disabled:opacity-60"
-            >
-              {joining ? "Joining…" : "Join"}
-            </button>
-            {joinError && (
-              <p
-                className="text-sm text-red-600 dark:text-red-400"
-                role="alert"
-              >
-                {joinError}
-              </p>
-            )}
-          </form>
-        </div>
+      <NameSelector
+        gameId={game.id}
+        gamePlayers={gamePlayers}
+        currentPlayerId={currentPlayerId!}
+        onClaimed={() => fetchAll()}
+      />
+    );
+  }
+
+  // Game is in results phase
+  if (game.phase === "results") {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <p className="text-zinc-600 dark:text-zinc-400">
+          Results — scoreboard and placement reveal. (Coming in Phase 5.)
+        </p>
       </div>
     );
   }
 
-  // Player is in the game — show the dashboard
+  // Game is in placing phase — show dashboard
   return (
     <div className="min-h-screen py-10 px-4">
       <div className="mb-8 text-center">
@@ -195,6 +192,8 @@ export default function PlayPage() {
       </div>
       <GameDashboard
         game={game}
+        gamePlayers={gamePlayers}
+        mySlot={mySlot}
         currentPlayerId={currentPlayerId!}
         inviteCode={inviteCode}
       />
