@@ -5,10 +5,14 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { NameSelector } from "@/components/NameSelector";
 import { GameDashboard } from "@/components/GameDashboard";
+import { PlacingPhase } from "@/components/PlacingPhase";
+import { GameInfoPanel } from "@/components/GameInfoPanel";
 import type { Database } from "@/lib/types/database";
+import type { Position } from "@/lib/game-types";
 
 type Game = Database["public"]["Tables"]["games"]["Row"];
 type GamePlayer = Database["public"]["Tables"]["game_players"]["Row"];
+type Guess = Database["public"]["Tables"]["guesses"]["Row"];
 
 export default function PlayPage() {
   const params = useParams();
@@ -17,6 +21,12 @@ export default function PlayPage() {
   const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Existing guesses by the current user (to know which friends are already placed)
+  const [myGuesses, setMyGuesses] = useState<Guess[]>([]);
+
+  // View mode: "graph" or "dashboard"
+  const [view, setView] = useState<"graph" | "dashboard">("graph");
 
   const supabase = createClient();
 
@@ -47,16 +57,33 @@ export default function PlayPage() {
       setLoading(false);
       return;
     }
-    setGame(rawGame as Game);
+    const gameData = rawGame as Game;
+    setGame(gameData);
 
     // Fetch game players
     const { data: players } = await supabase
       .from("game_players")
       .select("*")
-      .eq("game_id", (rawGame as Game).id)
+      .eq("game_id", gameData.id)
       .order("claimed_at", { ascending: true, nullsFirst: false });
 
-    if (players) setGamePlayers(players as GamePlayer[]);
+    const playerList = (players as GamePlayer[]) ?? [];
+    setGamePlayers(playerList);
+
+    // Find the current user's slot
+    const mySlot = playerList.find((gp) => gp.player_id === user!.id);
+
+    // Fetch existing guesses by this user
+    if (mySlot) {
+      const { data: guesses } = await supabase
+        .from("guesses")
+        .select("*")
+        .eq("game_id", gameData.id)
+        .eq("guesser_game_player_id", mySlot.id);
+
+      setMyGuesses((guesses as Guess[]) ?? []);
+    }
+
     setLoading(false);
   }, [inviteCode, supabase]);
 
@@ -64,7 +91,7 @@ export default function PlayPage() {
     fetchAll();
   }, [fetchAll]);
 
-  // Realtime: game_players changes (claims, new players, placements)
+  // Realtime: game_players changes
   useEffect(() => {
     if (!game?.id) return;
 
@@ -121,12 +148,71 @@ export default function PlayPage() {
     };
   }, [game?.id, supabase]);
 
+  // ---- Submit handler: writes placements to Supabase ----
+  //
+  // Uses delete + re-insert so moved tokens are updated and new ones are saved.
+
+  const handleSubmitPlacements = useCallback(
+    async (
+      selfPosition: Position,
+      guesses: { targetGamePlayerId: string; position: Position }[]
+    ) => {
+      if (!game || !currentPlayerId) return;
+
+      const mySlot = gamePlayers.find(
+        (gp) => gp.player_id === currentPlayerId
+      );
+      if (!mySlot) return;
+
+      // 1. Update self placement
+      const { error: selfErr } = await supabase
+        .from("game_players")
+        .update({
+          self_x: selfPosition.x,
+          self_y: selfPosition.y,
+          has_submitted: true,
+        })
+        .eq("id", mySlot.id);
+
+      if (selfErr) console.error("Failed to update self placement:", selfErr);
+
+      // 2. Delete all existing guesses by this user for this game
+      const { error: delErr } = await supabase
+        .from("guesses")
+        .delete()
+        .eq("game_id", game.id)
+        .eq("guesser_game_player_id", mySlot.id);
+
+      if (delErr) console.error("Failed to delete old guesses:", delErr);
+
+      // 3. Re-insert all current guesses (both previously placed + newly placed)
+      if (guesses.length > 0) {
+        const { error: insErr } = await supabase.from("guesses").insert(
+          guesses.map((g) => ({
+            game_id: game.id,
+            guesser_game_player_id: mySlot.id,
+            target_game_player_id: g.targetGamePlayerId,
+            guess_x: g.position.x,
+            guess_y: g.position.y,
+          }))
+        );
+
+        if (insErr) console.error("Failed to insert guesses:", insErr);
+      }
+
+      // 4. Refresh data and switch to dashboard
+      await fetchAll();
+      setView("dashboard");
+    },
+    [game, currentPlayerId, gamePlayers, supabase, fetchAll]
+  );
+
   // ---- Render states ----
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-[var(--secondary)]">Loading...</p>
+        <p className="text-secondary">Loading...</p>
       </div>
     );
   }
@@ -134,15 +220,15 @@ export default function PlayPage() {
   if (!game) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
-        <h1 className="text-xl font-semibold text-[var(--black)]">
+        <h1 className="text-xl font-semibold text-foreground">
           Game not found
         </h1>
-        <p className="text-[var(--secondary)] text-center max-w-sm">
+        <p className="text-secondary text-center max-w-sm">
           This invite link may be wrong or the game may have been deleted.
         </p>
         <a
           href="/"
-          className="rounded-lg bg-[var(--splash)] text-[var(--white)] px-4 py-2 font-medium"
+          className="rounded-lg bg-splash text-white px-4 py-2 font-medium"
         >
           Back home
         </a>
@@ -171,21 +257,74 @@ export default function PlayPage() {
   if (game.phase === "results") {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <p className="text-[var(--secondary)]">
+        <p className="text-secondary">
           Results — scoreboard and placement reveal. (Coming in Phase 5.)
         </p>
       </div>
     );
   }
 
-  // Game is in placing phase — show dashboard
+  // ---- Placing phase ----
+
+  // All friends (everyone except current user)
+  const allFriends = gamePlayers.filter((gp) => gp.id !== mySlot.id);
+
+  // Build initial positions map from existing guesses
+  const initialOtherPositions = new Map<string, Position>();
+  for (const g of myGuesses) {
+    initialOtherPositions.set(g.target_game_player_id, {
+      x: g.guess_x,
+      y: g.guess_y,
+    });
+  }
+
+  // Pre-existing self position (for re-entry)
+  const existingSelfPosition: Position | null =
+    mySlot.self_x != null && mySlot.self_y != null
+      ? { x: mySlot.self_x, y: mySlot.self_y }
+      : null;
+
+  const guessedCount = myGuesses.length;
+
+  // Graph view: first visit starts here; returning users can get here via
+  // "Continue placing" from the dashboard.
+  if (view === "graph") {
+    return (
+      <div className="h-dvh flex flex-col bg-surface overflow-y-auto">
+        {/* Pull-down info panel — won't compress */}
+        <div className="shrink-0">
+          <GameInfoPanel
+            game={game}
+            gamePlayers={gamePlayers}
+            mySlot={mySlot}
+            inviteCode={inviteCode}
+            guessedCount={guessedCount}
+          />
+        </div>
+
+        {/* Graph placing experience — minimum height prevents compression */}
+        <div className="flex-1 min-h-[85dvh]">
+          <PlacingPhase
+            game={game}
+            currentGamePlayerId={mySlot.id}
+            otherPlayers={allFriends}
+            initialSelfPosition={existingSelfPosition}
+            initialOtherPositions={initialOtherPositions}
+            onSubmit={handleSubmitPlacements}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Dashboard view
   return (
-    <div className="min-h-screen py-10 px-4">
+    <div className="min-h-screen py-10 px-4 bg-surface">
       <div className="mb-8 text-center">
-        <h1 className="text-2xl font-bold text-[var(--black)]">
+        <h1 className="text-2xl font-bold text-foreground font-display">
           Friend Place
         </h1>
-        <p className="text-sm text-[var(--secondary)] mt-1">
+        <p className="text-sm text-secondary mt-1">
           {game.axis_x_label_low} vs. {game.axis_x_label_high} &nbsp;|&nbsp;{" "}
           {game.axis_y_label_low} vs. {game.axis_y_label_high}
         </p>
@@ -196,6 +335,13 @@ export default function PlayPage() {
         mySlot={mySlot}
         currentPlayerId={currentPlayerId!}
         inviteCode={inviteCode}
+        guessedCount={guessedCount}
+        onContinuePlacing={() => {
+          setView("graph");
+        }}
+        onPlayersChanged={() => {
+          fetchAll();
+        }}
       />
     </div>
   );

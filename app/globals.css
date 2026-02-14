@@ -11,14 +11,21 @@
 }
 
 @theme inline {
-  --color-background: var(--surface);
-  --color-foreground: var(--black);
+  --color-background: #ffffff;
+  --color-foreground: #000000;
+  --color-surface: #f4f4f6;
+  --color-secondary: #66666e;
+  --color-black: #000000;
+  --color-splash: #F9874E;
+  --color-accent: #627EF8;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-outfit);
+  --font-body: var(--font-dm-sans);
 }
 
 body {
   background: var(--surface);
   color: var(--black);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-dm-sans), Arial, Helvetica, sans-serif;
 }
