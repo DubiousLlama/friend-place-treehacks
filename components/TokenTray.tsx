@@ -6,6 +6,7 @@ import type { NamePlacement, Position } from "@/lib/game-types";
 import type { GraphSizeConfig } from "@/lib/sizes";
 import { PlayerToken } from "@/components/PlayerToken";
 import { staggerContainer, staggerItem } from "@/lib/motion";
+import { trayShadow } from "@/lib/theme";
 
 interface TokenTrayProps {
   friends: NamePlacement[];
@@ -48,7 +49,8 @@ export function TokenTray({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="bg-surface border-t border-secondary/10 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]"
+          className="bg-surface border-t border-secondary/10"
+          style={{ boxShadow: trayShadow }}
         >
           <motion.div
             className="flex gap-3 px-4 py-3 flex-wrap justify-center"

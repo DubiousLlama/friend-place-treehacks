@@ -8,6 +8,7 @@ import type { GraphSizeConfig } from "@/lib/sizes";
 import { DESKTOP_SIZES } from "@/lib/sizes";
 import { pixelToNormalized, normalizedToPercent } from "@/lib/graph-utils";
 import { springTransition, tapScale, hoverLift } from "@/lib/motion";
+import { dragShadowTray, dragShadowPlaced, hoverShadow } from "@/lib/theme";
 
 interface PlayerTokenProps {
   /** Unique identifier for layoutId animations */
@@ -207,13 +208,11 @@ export function PlayerToken({
           onDragEnd={handleDragEnd}
           whileDrag={{
             scale: 1.08,
-            boxShadow: isSelf
-              ? "0 0 0 3px rgba(249,135,78,0.3), 0 6px 20px rgba(0,0,0,0.18)"
-              : "0 0 0 3px rgba(98,126,248,0.3), 0 6px 20px rgba(0,0,0,0.18)",
+            boxShadow: dragShadowTray(variant),
             zIndex: 50,
           }}
           whileTap={disabled ? undefined : tapScale}
-          whileHover={disabled ? undefined : { ...hoverLift, boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
+          whileHover={disabled ? undefined : { ...hoverLift, boxShadow: hoverShadow }}
           transition={springTransition}
           role="button"
           tabIndex={disabled ? -1 : 0}
@@ -267,9 +266,7 @@ export function PlayerToken({
         onDrag={handleDrag}
         onDragEnd={handleDragEnd}
         whileDrag={{
-          boxShadow: isSelf
-            ? "0 0 0 6px rgba(249,135,78,0.4), 0 4px 16px rgba(0,0,0,0.2)"
-            : "0 0 0 6px rgba(98,126,248,0.4), 0 4px 16px rgba(0,0,0,0.2)",
+          boxShadow: dragShadowPlaced(variant),
           zIndex: 50,
         }}
         whileTap={disabled ? undefined : tapScale}

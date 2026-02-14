@@ -8,6 +8,7 @@ import { PlayerToken } from "@/components/PlayerToken";
 import { TokenTray } from "@/components/TokenTray";
 import { computeLabelAnchors } from "@/lib/label-placement";
 import { tapScale, hoverLift, springTransition } from "@/lib/motion";
+import { theme } from "@/lib/theme";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { MOBILE_SIZES, DESKTOP_SIZES, toNormalizedSizes } from "@/lib/sizes";
 import type { PlacementSizes } from "@/lib/sizes";
@@ -328,8 +329,8 @@ function StepPill({ active, label }: { active: boolean; label: string }) {
   return (
     <motion.div
       animate={{
-        backgroundColor: active ? "#F9874E" : "#e5e5e7",
-        color: active ? "#ffffff" : "#66666e",
+        backgroundColor: active ? theme.splash : theme.surfaceMuted,
+        color: active ? theme.white : theme.secondary,
         scale: active ? 1 : 0.9,
       }}
       transition={springTransition}

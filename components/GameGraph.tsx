@@ -672,7 +672,7 @@ export function GameGraph({
               <div
                 className="absolute inset-0 pointer-events-none opacity-[0.08]"
                 style={{
-                  backgroundImage: `radial-gradient(circle, #66666e ${0.5 * transform.scale}px, transparent ${0.5 * transform.scale}px)`,
+                  backgroundImage: `radial-gradient(circle, var(--color-secondary) ${0.5 * transform.scale}px, transparent ${0.5 * transform.scale}px)`,
                   backgroundSize: `${20 * transform.scale}px ${20 * transform.scale}px`,
                   backgroundPosition: "center center",
                 }}
