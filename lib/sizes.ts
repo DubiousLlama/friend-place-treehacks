@@ -70,6 +70,104 @@ export const DESKTOP_SIZES: GraphSizeConfig = {
 };
 
 // ---------------------------------------------------------------------------
+// Results view — dot & label sizes
+// ---------------------------------------------------------------------------
+
+/** Font / padding for a single label category. */
+export interface LabelStyle {
+  fontSize: number;
+  padX: number;
+  padY: number;
+}
+
+export interface ResultsSizeConfig {
+  /** Self-placement dot diameter (px) — the authoritative "anchor" dot */
+  selfDotSize: number;
+  /** Self-placement invisible hit-area diameter (px) */
+  selfHitSize: number;
+  /** Guess dot diameter (px) — smaller satellite dots */
+  guessDotSize: number;
+  /** Guess dot invisible hit-area diameter (px) */
+  guessHitSize: number;
+  /** Guess label offset from dot edge (px) */
+  guessLabelOffset: number;
+  /** Gap from self-dot edge to name label edge (px) */
+  nameLabelOffset: number;
+
+  // ---- Per-category label styles ----
+  /** Primary placer name (always-visible chip on self-dots) */
+  placerLabel: LabelStyle;
+  /** Guesser name (shown on guess dots during network hover) */
+  guesserLabel: LabelStyle;
+  /** Point value label (e.g. "+63", shown on guess dots during breakdown) */
+  pointsLabel: LabelStyle;
+  /** Bonus label (e.g. "Bonus: +15", shown on self-dot during breakdown) */
+  bonusLabel: LabelStyle;
+}
+
+export const MOBILE_RESULTS_SIZES: ResultsSizeConfig = {
+  selfDotSize: 16,
+  selfHitSize: 40,
+  guessDotSize: 7,
+  guessHitSize: 14,
+  guessLabelOffset: 6,
+  nameLabelOffset: 14,
+  placerLabel:  { fontSize: 16, padX: 6, padY: 2 },
+  guesserLabel: { fontSize: 14, padX: 4, padY: 1 },
+  pointsLabel:  { fontSize: 14, padX: 4, padY: 1 },
+  bonusLabel:   { fontSize: 14, padX: 5, padY: 1 },
+};
+
+export const DESKTOP_RESULTS_SIZES: ResultsSizeConfig = {
+  selfDotSize: 20,
+  selfHitSize: 44,
+  guessDotSize: 8,
+  guessHitSize: 16,
+  guessLabelOffset: 8,
+  nameLabelOffset: 16,
+  placerLabel:  { fontSize: 20, padX: 6, padY: 4 },
+  guesserLabel: { fontSize: 13, padX: 5, padY: 4 },
+  pointsLabel:  { fontSize: 13, padX: 5, padY: 4 },
+  bonusLabel:   { fontSize: 13, padX: 5, padY: 4 },
+};
+
+/**
+ * Convert a LabelStyle + layout offset into normalised placement sizes
+ * for the cartographic algorithm.
+ */
+export function labelStyleToNormalized(
+  label: LabelStyle,
+  labelOffset: number,
+  graphWidth: number,
+  graphHeight: number,
+): PlacementSizes {
+  const lineH = label.fontSize * 1.25;
+  const labelHPx = lineH + 2 * label.padY;
+  const refDim = Math.min(graphWidth, graphHeight);
+
+  return {
+    labelH: labelHPx / graphHeight,
+    offset: labelOffset / refDim,
+    margin: 3 / refDim,
+    charWidth: (label.fontSize * 0.62) / graphWidth,
+    padWidth: (2 * label.padX) / graphWidth,
+  };
+}
+
+/**
+ * Convenience: compute normalised sizes for the primary placer label.
+ * (Kept for backwards compat — the algorithm uses the largest label style
+ *  for overlap detection.)
+ */
+export function toResultsNormalizedSizes(
+  cfg: ResultsSizeConfig,
+  graphWidth: number,
+  graphHeight: number,
+): PlacementSizes {
+  return labelStyleToNormalized(cfg.placerLabel, cfg.nameLabelOffset, graphWidth, graphHeight);
+}
+
+// ---------------------------------------------------------------------------
 // Normalised sizes for the placement algorithm
 // ---------------------------------------------------------------------------
 

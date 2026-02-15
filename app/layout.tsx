@@ -27,9 +27,16 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${outfit.variable} ${dmSans.variable} antialiased`}
+        className={`${outfit.variable} ${dmSans.variable} antialiased flex flex-col h-dvh`}
       >
-        {children}
+        <header data-global-header className="shrink-0 py-3 flex items-center justify-center border-b border-black/5 bg-surface">
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">
+            FriendPlace
+          </h1>
+        </header>
+        <main className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+          {children}
+        </main>
       </body>
     </html>
   );

@@ -19,10 +19,20 @@ import type { PlacementSizes } from "@/lib/sizes";
 
 export type Anchor = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
 
-interface LabelInput {
+export interface LabelInput {
   id: string;
   position: Position; // normalized 0–1
   labelWidth: number; // estimated width in normalized coords
+  /** Per-label normalized height (overrides global labelH when provided) */
+  labelH?: number;
+  /** Per-label normalized offset from anchor point (overrides global offset) */
+  offset?: number;
+}
+
+/** A circular obstacle that labels should try to avoid (e.g. a dot). */
+export interface Obstacle {
+  position: Position; // normalized 0–1
+  radius: number;     // normalized radius
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +63,7 @@ const PREF: Record<Anchor, number> = {
 
 /** Scoring weights (adapted from Christensen et al. Table 1) */
 const W_OVERLAP = 40;
+const W_DOT = 15;   // label-dot overlap (lower than label-label)
 const W_POS = 1;
 const W_OOB = 1000;
 
@@ -115,6 +126,16 @@ function isInBounds(r: Rect): boolean {
   return r.x1 >= 0 && r.y1 >= 0 && r.x2 <= 1 && r.y2 <= 1;
 }
 
+/** Check whether a rectangle overlaps a circle (obstacle). */
+function rectOverlapsCircle(r: Rect, cx: number, cy: number, cr: number): boolean {
+  // Find the closest point on the rect to the circle centre
+  const closestX = Math.max(r.x1, Math.min(cx, r.x2));
+  const closestY = Math.max(r.y1, Math.min(cy, r.y2));
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  return dx * dx + dy * dy < cr * cr;
+}
+
 // ---------------------------------------------------------------------------
 // Main algorithm
 // ---------------------------------------------------------------------------
@@ -122,9 +143,12 @@ function isInBounds(r: Rect): boolean {
 /**
  * Compute optimal label anchor directions for a set of point labels.
  *
- * @param labels  - Array of labels with normalised positions and widths.
- * @param sizes   - Optional normalised sizes (from `toNormalizedSizes`).
- *                  Falls back to desktop-ish defaults when omitted.
+ * @param labels    - Array of labels with normalised positions and widths.
+ * @param sizes     - Optional normalised sizes (from `toNormalizedSizes`).
+ *                    Falls back to desktop-ish defaults when omitted.
+ *                    Individual labels can override `labelH` and `offset`.
+ * @param obstacles - Optional array of circular obstacles (e.g. dots) that
+ *                    labels should try to avoid overlapping.
  *
  * Phase 1 — Greedy initialisation: process labels in order, for each pick the
  * anchor with the lowest cost considering already-placed labels.
@@ -136,26 +160,47 @@ function isInBounds(r: Rect): boolean {
 export function computeLabelAnchors(
   labels: LabelInput[],
   sizes?: PlacementSizes,
+  obstacles?: Obstacle[],
 ): Map<string, Anchor> {
   if (labels.length === 0) return new Map();
 
-  const labelH = sizes?.labelH ?? DEFAULT_LABEL_H;
-  const offset = sizes?.offset ?? DEFAULT_OFFSET;
+  const defaultLabelH = sizes?.labelH ?? DEFAULT_LABEL_H;
+  const defaultOffset = sizes?.offset ?? DEFAULT_OFFSET;
   const margin = sizes?.margin ?? DEFAULT_MARGIN;
+  const obs = obstacles ?? [];
 
-  // Convenience closures that capture the resolved sizes
-  const lRect = (pos: Position, anchor: Anchor, labelW: number) =>
-    labelRect(pos, anchor, labelW, labelH, offset);
+  // Per-label rect: respects per-label overrides for height/offset
+  const lRect = (idx: number, anchor: Anchor) => {
+    const l = labels[idx];
+    return labelRect(
+      l.position,
+      anchor,
+      l.labelWidth,
+      l.labelH ?? defaultLabelH,
+      l.offset ?? defaultOffset,
+    );
+  };
 
   const overlap = (a: Rect, b: Rect) => rectsOverlap(a, b, margin);
 
+  const dotCost = (rect: Rect) => {
+    let c = 0;
+    for (const o of obs) {
+      if (rectOverlapsCircle(rect, o.position.x, o.position.y, o.radius)) {
+        c += W_DOT;
+      }
+    }
+    return c;
+  };
+
   const cost = (idx: number, anchor: Anchor, assignment: Anchor[]) => {
-    const rect = lRect(labels[idx].position, anchor, labels[idx].labelWidth);
+    const rect = lRect(idx, anchor);
     let c = W_POS * PREF[anchor];
     if (!isInBounds(rect)) c += W_OOB;
+    c += dotCost(rect);
     for (let j = 0; j < labels.length; j++) {
       if (j === idx) continue;
-      if (overlap(rect, lRect(labels[j].position, assignment[j], labels[j].labelWidth))) {
+      if (overlap(rect, lRect(j, assignment[j]))) {
         c += W_OVERLAP;
       }
     }
@@ -171,11 +216,12 @@ export function computeLabelAnchors(
     let bestCost = Infinity;
 
     for (const a of ALL_ANCHORS) {
-      const rect = lRect(labels[i].position, a, labels[i].labelWidth);
+      const rect = lRect(i, a);
       let c = W_POS * PREF[a];
       if (!isInBounds(rect)) c += W_OOB;
+      c += dotCost(rect);
       for (let j = 0; j < i; j++) {
-        if (overlap(rect, lRect(labels[j].position, assignment[j], labels[j].labelWidth))) {
+        if (overlap(rect, lRect(j, assignment[j]))) {
           c += W_OVERLAP;
         }
       }

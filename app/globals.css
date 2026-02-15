@@ -32,3 +32,11 @@ body {
   color: var(--foreground);
   font-family: var(--font-dm-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Hide the global header on desktop when the placing-phase sidebar is active.
+   !important is needed to override Tailwind utility classes (e.g. flex) on the header. */
+@media (min-width: 768px) {
+  body.desktop-sidebar-active [data-global-header] {
+    display: none !important;
+  }
+}
