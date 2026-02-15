@@ -43,6 +43,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     has_submitted: false,
     score: null,
     claimed_at: new Date().toISOString(),
+    guesses_count: 0,
   },
   {
     id: "gp-3",
@@ -54,6 +55,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     has_submitted: false,
     score: null,
     claimed_at: null,
+    guesses_count: 0,
   },
   {
     id: "gp-4",
@@ -65,6 +67,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     has_submitted: false,
     score: null,
     claimed_at: null,
+    guesses_count: 0,
   },
   {
     id: "gp-5",
@@ -76,6 +79,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     has_submitted: false,
     score: null,
     claimed_at: new Date().toISOString(),
+    guesses_count: 0,
   },
   {
     id: "gp-6",
@@ -87,6 +91,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     has_submitted: false,
     score: null,
     claimed_at: null,
+    guesses_count: 0,
   },
 ];
 
