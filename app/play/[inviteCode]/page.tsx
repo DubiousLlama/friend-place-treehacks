@@ -232,7 +232,8 @@ export default function PlayPage() {
   );
 
   // ---- End game handler: host transitions to results phase ----
-  // Uses the check_and_end_game RPC with force=true so scores are computed.
+  // Uses the check_and_end_game RPC with force=true to transition to results.
+  // Scores are computed client-side from lib/scoring when viewing results.
 
   const handleEndGame = useCallback(async () => {
     if (!game || !currentPlayerId) return;

@@ -17,8 +17,29 @@ type Guess = Database["public"]["Tables"]["guesses"]["Row"];
 /** Maximum points a guesser can earn per correct guess (perfect placement). */
 export const MAX_GUESS_POINTS = 100;
 
-/** Fraction of guesser points awarded to the target as a bonus. */
-export const TARGET_BONUS_FRACTION = 0.2;
+/**
+ * Standard deviation for the Gaussian scoring falloff.
+ *
+ * Controls how quickly points drop with distance.  A smaller value
+ * penalises mid-range guesses more aggressively.
+ *
+ * With σ = 0.25 on a 0-1 normalised board:
+ *   d=0.0 → 100 pts, d=0.1 → 92 pts, d=0.2 → 73 pts,
+ *   d=0.3 → 49 pts,  d=0.5 → 14 pts, d=0.7 → 2 pts
+ */
+export const GAUSS_SIGMA = 0.3;
+export const HYPERGAUS_k = 4;
+export const HYPERGAUS_SIGMA = 0.3;
+export const HYPERGAUSS_WEIGHT = 0.15;
+export const GAUSS_WEIGHT = 0.5;
+
+/**
+ * Fraction of guesser points the target receives: 1 / (numPlayers + 1).
+ * Exported for client-side score breakdown (scoring-client.ts).
+ */
+export function getTargetBonusFraction(numPlayers: number): number {
+  return 1 / (numPlayers);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,10 +58,12 @@ export function euclideanDistance(
 }
 
 /**
- * Accuracy score for a single guess (0-1).
- * accuracy = max(0, 1 - distance)
+ * Accuracy score for a single guess (0-1) using a Gaussian falloff.
+ *
+ * accuracy = exp(-distance² / (2 * σ²))
+ *
  * A perfect guess (distance = 0) returns 1.
- * A guess with distance >= 1 returns 0.
+ * Points drop steeply for moderate distances, rewarding precision.
  */
 export function guessAccuracy(
   guessX: number,
@@ -49,7 +72,10 @@ export function guessAccuracy(
   targetSelfY: number,
 ): number {
   const dist = euclideanDistance(guessX, guessY, targetSelfX, targetSelfY);
-  return Math.max(0, 1 - dist);
+  return (
+    GAUSS_WEIGHT * Math.exp(-(dist * dist) / (2 * GAUSS_SIGMA * GAUSS_SIGMA)) +
+    HYPERGAUSS_WEIGHT * Math.exp(-((dist / HYPERGAUS_SIGMA) ** HYPERGAUS_k))
+  ) / (GAUSS_WEIGHT + HYPERGAUSS_WEIGHT);
 }
 
 // ---------------------------------------------------------------------------
@@ -82,11 +108,16 @@ export function computeScores(
 
   // Accumulators: gamePlayerId → running total
   const scores = new Map<string, number>();
+  let numPlayers = 0;
   for (const gp of gamePlayers) {
     if (gp.player_id != null) {
       scores.set(gp.id, 0);
+      numPlayers++;
     }
   }
+
+  /** Fraction of guesser points the target receives: 1 / (numPlayers + 1). */
+  const targetFraction = 1 / (numPlayers + 1);
 
   for (const guess of guesses) {
     const targetSelf = selfPlacements.get(guess.target_game_player_id);
@@ -103,7 +134,7 @@ export function computeScores(
     );
 
     const guesserPoints = accuracy * MAX_GUESS_POINTS;
-    const targetBonus = guesserPoints * TARGET_BONUS_FRACTION;
+    const targetBonus = guesserPoints * targetFraction;
 
     // Add guesser points
     const currentGuesser = scores.get(guess.guesser_game_player_id) ?? 0;

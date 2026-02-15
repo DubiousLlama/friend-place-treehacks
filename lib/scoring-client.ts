@@ -13,7 +13,7 @@ import {
   guessAccuracy,
   euclideanDistance,
   MAX_GUESS_POINTS,
-  TARGET_BONUS_FRACTION,
+  getTargetBonusFraction,
 } from "@/lib/scoring";
 
 // ---------------------------------------------------------------------------
@@ -78,6 +78,7 @@ export function computeScoreBreakdowns(
 
   // Initialize breakdowns for all claimed players
   const breakdowns = new Map<string, PlayerScoreBreakdown>();
+  let numPlayers = 0;
   for (const gp of gamePlayers) {
     if (gp.player_id != null) {
       breakdowns.set(gp.id, {
@@ -89,8 +90,10 @@ export function computeScoreBreakdowns(
         guessDetails: [],
         bonusDetails: [],
       });
+      numPlayers++;
     }
   }
+  const targetFraction = getTargetBonusFraction(numPlayers);
 
   // Process each guess
   for (const guess of guesses) {
@@ -110,7 +113,7 @@ export function computeScoreBreakdowns(
       targetSelf.y,
     );
     const guesserPoints = accuracy * MAX_GUESS_POINTS;
-    const targetBonus = guesserPoints * TARGET_BONUS_FRACTION;
+    const targetBonus = guesserPoints * targetFraction;
 
     const detail: GuessScoreDetail = {
       guessId: guess.id,
@@ -156,11 +159,14 @@ export function computeAllGuessDetails(
   guesses: Guess[],
 ): GuessScoreDetail[] {
   const selfPlacements = new Map<string, { x: number; y: number }>();
+  let numPlayers = 0;
   for (const gp of gamePlayers) {
     if (gp.self_x != null && gp.self_y != null) {
       selfPlacements.set(gp.id, { x: gp.self_x, y: gp.self_y });
     }
+    if (gp.player_id != null) numPlayers++;
   }
+  const targetFraction = getTargetBonusFraction(numPlayers);
 
   const details: GuessScoreDetail[] = [];
 
@@ -181,7 +187,7 @@ export function computeAllGuessDetails(
       targetSelf.y,
     );
     const guesserPoints = accuracy * MAX_GUESS_POINTS;
-    const targetBonus = guesserPoints * TARGET_BONUS_FRACTION;
+    const targetBonus = guesserPoints * targetFraction;
 
     details.push({
       guessId: guess.id,
