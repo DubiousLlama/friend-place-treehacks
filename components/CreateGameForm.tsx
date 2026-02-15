@@ -78,6 +78,7 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
   const [lastVerticalPair, setLastVerticalPair] = useState<{ low: string; high: string } | null>(null);
   const [pastGameAxes, setPastGameAxes] = useState<string[]>([]);
   const appliedParentAxesRef = useRef(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -502,78 +503,6 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
         />
       </div>
 
-      <div className="flex flex-col gap-4 min-w-0">
-        <p className="text-sm text-secondary">
-          {loadingAxes ? "Loading today's axes..." : "Today's axes – edit or use the reload next to each axis."}
-        </p>
-        <fieldset className="flex flex-col gap-2 min-w-0">
-          <div className="flex items-center gap-2">
-            <legend className="text-sm font-medium text-black">Horizontal</legend>
-            {!loadingAxes && (
-              <button
-                type="button"
-                onClick={() => handleRegenerateAxis("horizontal")}
-                disabled={regeneratingAxis !== null || regensLeft <= 0}
-                className="inline-flex items-center justify-center rounded-lg border border-surface-muted p-1.5 text-secondary hover:border-splash hover:text-splash disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                title={regensLeft <= 0 ? "No regenerations left today" : `New horizontal axis (${regensLeft} left today)`}
-                aria-label={regensLeft <= 0 ? "No regenerations left" : "Regenerate horizontal axis"}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={regeneratingAxis === "horizontal" ? "animate-spin" : ""}>
-                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
-                </svg>
-              </button>
-            )}
-          </div>
-          <div className="flex gap-2 min-w-0">
-            <input type="text" value={xLow} onChange={(e) => setXLow(e.target.value)} placeholder="Left" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
-            <input type="text" value={xHigh} onChange={(e) => setXHigh(e.target.value)} placeholder="Right" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
-          </div>
-        </fieldset>
-        <fieldset className="flex flex-col gap-2 min-w-0">
-          <div className="flex items-center gap-2">
-            <legend className="text-sm font-medium text-black">Vertical</legend>
-            {!loadingAxes && (
-              <button
-                type="button"
-                onClick={() => handleRegenerateAxis("vertical")}
-                disabled={regeneratingAxis !== null || regensLeft <= 0}
-                className="inline-flex items-center justify-center rounded-lg border border-surface-muted p-1.5 text-secondary hover:border-splash hover:text-splash disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                title={regensLeft <= 0 ? "No regenerations left today" : `New vertical axis (${regensLeft} left today)`}
-                aria-label={regensLeft <= 0 ? "No regenerations left" : "Regenerate vertical axis"}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={regeneratingAxis === "vertical" ? "animate-spin" : ""}>
-                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
-                </svg>
-              </button>
-            )}
-          </div>
-          <div className="flex gap-2 min-w-0">
-            <input type="text" value={yLow} onChange={(e) => setYLow(e.target.value)} placeholder="Bottom" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
-            <input type="text" value={yHigh} onChange={(e) => setYHigh(e.target.value)} placeholder="Top" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
-          </div>
-        </fieldset>
-      </div>
-
-      {((isLinked && savedGroups.length > 0) || initialGroupId) && (
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-black">
-            {initialGroupId ? "Creating game for this group" : "Start from a saved group"}
-          </label>
-          <select value={selectedGroupId ?? ""} onChange={(e) => setSelectedGroupId(e.target.value || null)} className="rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black">
-            <option value="">None</option>
-            {selectedGroupId && !initialGroup && !savedGroups.some((g) => g.id === selectedGroupId) && (
-              <option value={selectedGroupId}>This group</option>
-            )}
-            {[
-              ...(initialGroup && !savedGroups.some((g) => g.id === initialGroup.id) ? [initialGroup] : []),
-              ...savedGroups,
-            ].map((g) => (
-              <option key={g.id} value={g.id}>{g.name?.trim() || "Unnamed group"}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
       <div className="flex flex-col gap-3">
         <label className="text-sm font-medium text-black">Friends in this game</label>
         <p className="text-xs text-secondary">Add names or email addresses. Use an email to add someone with an account or send them an invite.</p>
@@ -615,15 +544,116 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
         <button type="button" onClick={addPlayerNameField} className="self-start rounded-lg border border-dashed border-surface-muted px-3 py-1.5 text-sm text-secondary hover:border-splash hover:text-splash transition-colors">+ Add another friend</button>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-black">Game ends at</label>
-        <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black" />
-      </div>
+      <div className="border-t border-surface-muted pt-4">
+        <button
+          type="button"
+          onClick={() => setCustomizeOpen((o) => !o)}
+          className="flex items-center gap-2 w-full text-left text-sm font-medium text-secondary hover:text-black transition-colors"
+          aria-expanded={customizeOpen}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`shrink-0 transition-transform ${customizeOpen ? "rotate-180" : ""}`}
+            aria-hidden
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+          Customize
+        </button>
+        {customizeOpen && (
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-4 min-w-0">
+              <p className="text-sm text-secondary">
+                {loadingAxes ? "Loading today's axes..." : "Today's axes – edit or use the reload next to each axis."}
+              </p>
+              <fieldset className="flex flex-col gap-2 min-w-0">
+                <div className="flex items-center gap-2">
+                  <legend className="text-sm font-medium text-black">Horizontal</legend>
+                  {!loadingAxes && (
+                    <button
+                      type="button"
+                      onClick={() => handleRegenerateAxis("horizontal")}
+                      disabled={regeneratingAxis !== null || regensLeft <= 0}
+                      className="inline-flex items-center justify-center rounded-lg border border-surface-muted p-1.5 text-secondary hover:border-splash hover:text-splash disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title={regensLeft <= 0 ? "No regenerations left today" : `New horizontal axis (${regensLeft} left today)`}
+                      aria-label={regensLeft <= 0 ? "No regenerations left" : "Regenerate horizontal axis"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={regeneratingAxis === "horizontal" ? "animate-spin" : ""}>
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2 min-w-0">
+                  <input type="text" value={xLow} onChange={(e) => setXLow(e.target.value)} placeholder="Left" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
+                  <input type="text" value={xHigh} onChange={(e) => setXHigh(e.target.value)} placeholder="Right" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
+                </div>
+              </fieldset>
+              <fieldset className="flex flex-col gap-2 min-w-0">
+                <div className="flex items-center gap-2">
+                  <legend className="text-sm font-medium text-black">Vertical</legend>
+                  {!loadingAxes && (
+                    <button
+                      type="button"
+                      onClick={() => handleRegenerateAxis("vertical")}
+                      disabled={regeneratingAxis !== null || regensLeft <= 0}
+                      className="inline-flex items-center justify-center rounded-lg border border-surface-muted p-1.5 text-secondary hover:border-splash hover:text-splash disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      title={regensLeft <= 0 ? "No regenerations left today" : `New vertical axis (${regensLeft} left today)`}
+                      aria-label={regensLeft <= 0 ? "No regenerations left" : "Regenerate vertical axis"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={regeneratingAxis === "vertical" ? "animate-spin" : ""}>
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2 min-w-0">
+                  <input type="text" value={yLow} onChange={(e) => setYLow(e.target.value)} placeholder="Bottom" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
+                  <input type="text" value={yHigh} onChange={(e) => setYHigh(e.target.value)} placeholder="Top" maxLength={20} className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary" />
+                </div>
+              </fieldset>
+            </div>
 
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input type="checkbox" checked={endEarlyWhenComplete} onChange={(e) => setEndEarlyWhenComplete(e.target.checked)} className="size-4 rounded border-surface-muted accent-splash" />
-        <span className="text-sm text-secondary">End early once all names are claimed and everyone has placed</span>
-      </label>
+            {((isLinked && savedGroups.length > 0) || initialGroupId) && (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-black">
+                  {initialGroupId ? "Creating game for this group" : "Start from a saved group"}
+                </label>
+                <select value={selectedGroupId ?? ""} onChange={(e) => setSelectedGroupId(e.target.value || null)} className="rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black">
+                  <option value="">None</option>
+                  {selectedGroupId && !initialGroup && !savedGroups.some((g) => g.id === selectedGroupId) && (
+                    <option value={selectedGroupId}>This group</option>
+                  )}
+                  {[
+                    ...(initialGroup && !savedGroups.some((g) => g.id === initialGroup.id) ? [initialGroup] : []),
+                    ...savedGroups,
+                  ].map((g) => (
+                    <option key={g.id} value={g.id}>{g.name?.trim() || "Unnamed group"}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-black">Game ends at</label>
+              <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black" />
+            </div>
+
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={endEarlyWhenComplete} onChange={(e) => setEndEarlyWhenComplete(e.target.checked)} className="size-4 rounded border-surface-muted accent-splash" />
+              <span className="text-sm text-secondary">End early once all names are claimed and everyone has placed</span>
+            </label>
+          </div>
+        )}
+      </div>
 
       <button type="submit" disabled={creating} className="rounded-xl bg-splash text-white py-3 font-semibold hover:opacity-90 disabled:opacity-60 transition-opacity">
         {creating ? "Creating..." : "Create game"}
