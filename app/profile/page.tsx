@@ -78,8 +78,6 @@ export default function ProfilePage() {
   const { user, loading: authLoading, isLinked } = useAuth();
   const router = useRouter();
   const [displayName, setDisplayName] = useState<string | null>(null);
-  const [phone, setPhone] = useState<string>("");
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [scoreHistory, setScoreHistory] = useState<GameRankEntry[]>([]);
   const [gamesCount, setGamesCount] = useState(0);
   const [bestRank, setBestRank] = useState<number | null>(null);
@@ -88,7 +86,6 @@ export default function ProfilePage() {
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [currentGames, setCurrentGames] = useState<CurrentGameEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingNotifications, setSavingNotifications] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -102,7 +99,7 @@ export default function ProfilePage() {
 
       const { data: player } = await supabase
         .from("players")
-        .select("display_name, phone, notifications_enabled")
+        .select("display_name")
         .eq("id", user.id)
         .single();
 
@@ -126,8 +123,6 @@ export default function ProfilePage() {
         if (fromAuth) nameToShow = (meta?.full_name as string)?.trim() || (meta?.name as string)?.trim();
       }
       setDisplayName(nameToShow);
-      setPhone(player?.phone ?? "");
-      setNotificationsEnabled(player?.notifications_enabled ?? true);
 
       const { data: featuredRows } = await supabase
         .from("user_featured_tags")
@@ -334,13 +329,6 @@ export default function ProfilePage() {
     setFeaturedTags((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.refresh();
-    window.location.href = "/";
-  };
-
   if (authLoading || (!user && !authLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -365,13 +353,6 @@ export default function ProfilePage() {
           <Link href="/" className="text-sm text-splash hover:underline">
             Back home
           </Link>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="text-sm text-secondary hover:text-splash underline underline-offset-2"
-          >
-            Sign out
-          </button>
         </div>
       </div>
     );
@@ -399,62 +380,7 @@ export default function ProfilePage() {
               <p className="text-sm text-secondary">
                 {user?.email ?? "Signed in"}
               </p>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                className="text-sm text-secondary hover:text-splash underline underline-offset-2"
-              >
-                Sign out
-              </button>
             </div>
-
-            <section className="flex flex-col gap-2">
-              <h2 className="font-display text-lg font-semibold text-foreground">
-                Notifications
-              </h2>
-              <p className="text-sm text-secondary">
-                Optional phone number for game reminders (e.g. when you&apos;re added to a game or results are ready).
-              </p>
-              <input
-                type="tel"
-                placeholder="Phone (optional, E.164)"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                onBlur={async () => {
-                  if (!user?.id || savingNotifications) return;
-                  setSavingNotifications(true);
-                  await createClient()
-                    .from("players")
-                    .update({
-                      phone: phone.trim() || null,
-                      notifications_enabled: notificationsEnabled,
-                    })
-                    .eq("id", user.id);
-                  setSavingNotifications(false);
-                }}
-                className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-secondary"
-              />
-              <label className="flex items-center gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={notificationsEnabled}
-                  onChange={(e) => {
-                    const v = e.target.checked;
-                    setNotificationsEnabled(v);
-                    if (user?.id && !savingNotifications) {
-                      setSavingNotifications(true);
-                      createClient()
-                        .from("players")
-                        .update({ notifications_enabled: v })
-                        .eq("id", user.id)
-                        .then(() => setSavingNotifications(false));
-                    }
-                  }}
-                  className="rounded border-border"
-                />
-                Send game reminders
-              </label>
-            </section>
 
             <div className="flex flex-wrap items-center justify-center gap-2">
                 {featuredTags.map((t) => (
