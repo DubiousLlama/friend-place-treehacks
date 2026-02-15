@@ -8,16 +8,22 @@ import { useAuth } from "@/lib/use-auth";
 import type { Database } from "@/lib/types/database";
 
 type SavedGroup = Database["public"]["Tables"]["saved_groups"]["Row"];
-type GroupMember = Database["public"]["Tables"]["group_members"]["Row"];
+type GroupMemberRow = Database["public"]["Tables"]["group_members"]["Row"];
+type GroupMemberWithName = GroupMemberRow & { players?: { display_name: string | null } | null };
 
 interface GroupWithMembers {
   group: SavedGroup;
-  members: GroupMember[];
+  members: GroupMemberWithName[];
+}
+
+function getMemberDisplayName(m: GroupMemberWithName): string {
+  if (m.player_id) return m.players?.display_name?.trim() ?? "Member";
+  return m.anonymous_display_name?.trim() ?? "Guest";
 }
 
 function getGroupDisplayName(g: GroupWithMembers): string {
   if (g.group.name && g.group.name.trim() !== "") return g.group.name;
-  return g.members.map((m) => m.display_name).join(", ");
+  return g.members.map(getMemberDisplayName).join(", ");
 }
 
 export default function ProfileGroupsPage() {
@@ -32,7 +38,7 @@ export default function ProfileGroupsPage() {
       router.replace("/");
       return;
     }
-    if (!user || !isLinked) return;
+    if (!user) return;
 
     const run = async () => {
       const supabase = createClient();
@@ -52,13 +58,14 @@ export default function ProfileGroupsPage() {
         .in("id", groupIds);
       const { data: allMembers } = await supabase
         .from("group_members")
-        .select("*")
+        .select("*, players(display_name)")
         .in("group_id", groupIds)
         .order("sort_order", { ascending: true });
-      const membersByGroup = new Map<string, GroupMember[]>();
+      const membersByGroup = new Map<string, GroupMemberWithName[]>();
       for (const m of allMembers ?? []) {
+        const withName = m as GroupMemberWithName;
         const list = membersByGroup.get(m.group_id) ?? [];
-        list.push(m);
+        list.push(withName);
         membersByGroup.set(m.group_id, list);
       }
       const withMembers: GroupWithMembers[] = (groupData ?? []).map((group) => ({
@@ -70,7 +77,7 @@ export default function ProfileGroupsPage() {
     };
 
     run();
-  }, [user, authLoading, isLinked, router]);
+  }, [user, authLoading, router]);
 
   const handleLeave = async (groupId: string) => {
     if (!user) return;
@@ -110,15 +117,6 @@ export default function ProfileGroupsPage() {
     );
   }
 
-  if (!isLinked) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-center text-secondary">Sign in to see your groups.</p>
-        <Link href="/" className="text-splash hover:underline">Back home</Link>
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-screen flex-col items-center px-4 py-12 font-sans">
       <main className="w-full max-w-lg flex flex-col items-center gap-8">
@@ -130,14 +128,22 @@ export default function ProfileGroupsPage() {
               <h1 className="text-2xl font-bold tracking-tight text-black">
                 Groups
               </h1>
-      <p className="text-sm text-secondary mb-6">
-        Groups you’re in. You can leave a group or open it to see games and members.
+              <p className="text-sm text-secondary mb-6">
+                Groups you’re in. You can leave a group or open it to see games and members.
               </p>
+              {isLinked && (
+                <Link
+                  href="/profile/groups/new"
+                  className="rounded-lg bg-splash text-white px-4 py-2 text-sm font-medium hover:bg-splash/90 transition-colors w-fit mx-auto"
+                >
+                  Create group
+                </Link>
+              )}
             </div>
 
             {groups.length === 0 ? (
-        <p className="text-secondary">
-          You’re not in any groups yet. Save a group from a game result or get invited.
+              <p className="text-secondary">
+                You’re not in any groups yet. Create your first group, save a group from a game result, or get invited.
               </p>
             ) : (
               <ul className="space-y-2">

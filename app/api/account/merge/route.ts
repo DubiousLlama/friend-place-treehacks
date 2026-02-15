@@ -121,11 +121,13 @@ export async function POST(request: NextRequest) {
     .eq("id", currentUser.id)
     .single();
 
+  let suggestedDisplayName: string | undefined;
   if (fromPlayer?.display_name && !toPlayer?.display_name) {
     await admin
       .from("players")
       .update({ display_name: fromPlayer.display_name })
       .eq("id", currentUser.id);
+    suggestedDisplayName = fromPlayer.display_name;
   }
 
   // Remove the anonymous player row so it doesn't linger (no FKs point to it now)
@@ -137,5 +139,5 @@ export async function POST(request: NextRequest) {
     .update({ linked_at: new Date().toISOString() })
     .eq("id", currentUser.id);
 
-  return NextResponse.json({ merged: true });
+  return NextResponse.json({ merged: true, ...(suggestedDisplayName && { suggestedDisplayName }) });
 }

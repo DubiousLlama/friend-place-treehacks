@@ -105,7 +105,6 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
   const [savingGroup, setSavingGroup] = useState(false);
   const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
   const [showDailyPrompt, setShowDailyPrompt] = useState(false);
-  const [dailyGameEnabled, setDailyGameEnabled] = useState(false);
   const [savingDaily, setSavingDaily] = useState(false);
 
   // ---- Data fetching ----
@@ -123,6 +122,13 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
         setLoadingGuesses(false);
       });
   }, [game.id]);
+
+  // Award consensus tags when viewing results (idempotent; handles cron-ended games)
+  useEffect(() => {
+    if (game?.id) {
+      fetch(`/api/games/${game.id}/award-tags`, { method: "POST" }).catch(() => {});
+    }
+  }, [game?.id]);
 
   // ---- Derived data ----
 
@@ -431,6 +437,54 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     setActiveNetwork(null);
   }, []);
 
+  const handleCreateGroup = useCallback(async () => {
+    const name = groupNameInput.trim() || gamePlayers.map((p) => p.display_name).join(", ");
+    if (!currentPlayerId) return;
+    setSavingGroup(true);
+    const supabase = createClient();
+    const { data: group, error: groupErr } = await supabase
+      .from("saved_groups")
+      .insert({ owner_id: currentPlayerId, name })
+      .select("id")
+      .single();
+    if (groupErr || !group) {
+      setSavingGroup(false);
+      return;
+    }
+    const mySlot = gamePlayers.find((p) => p.player_id === currentPlayerId);
+    await supabase.from("group_members").insert({
+      group_id: group.id,
+      player_id: currentPlayerId,
+      is_anonymous: false,
+      sort_order: 0,
+    });
+    let so = 1;
+    for (const gp of gamePlayers) {
+      if (gp.player_id === currentPlayerId) continue;
+      await supabase.from("group_members").insert({
+        group_id: group.id,
+        player_id: gp.player_id ?? null,
+        anonymous_display_name: gp.player_id == null ? gp.display_name : null,
+        is_anonymous: gp.player_id == null,
+        sort_order: so++,
+      });
+    }
+    setCreatedGroupId(group.id);
+    setSavingGroup(false);
+    setShowCreateGroup(false);
+    setShowDailyPrompt(true);
+  }, [currentPlayerId, gamePlayers, groupNameInput]);
+
+  const handleDailyChoice = useCallback(async (enable: boolean) => {
+    if (!createdGroupId) return;
+    setSavingDaily(true);
+    const supabase = createClient();
+    await supabase.from("saved_groups").update({ daily_game_enabled: enable }).eq("id", createdGroupId);
+    setSavingDaily(false);
+    setShowDailyPrompt(false);
+    setCreatedGroupId(null);
+  }, [createdGroupId]);
+
   // ---- Opacity helpers ----
 
   const getSelfDotOpacity = useCallback(
@@ -475,7 +529,6 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     [activeBreakdown, activeNetwork],
   );
 
-  // Should a label be shown on a guess dot?
   // ---- Loading state ----
 
   if (loadingGuesses) {
@@ -488,55 +541,6 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
 
   // ---- Breakdown summary ----
   const breakdownPlayer = activeBreakdown ? breakdowns.get(activeBreakdown) : null;
-
-  const handleCreateGroup = useCallback(async () => {
-    const name = groupNameInput.trim() || gamePlayers.map((p) => p.display_name).join(", ");
-    if (!currentPlayerId) return;
-    setSavingGroup(true);
-    const supabase = createClient();
-    const { data: group, error: groupErr } = await supabase
-      .from("saved_groups")
-      .insert({ owner_id: currentPlayerId, name })
-      .select("id")
-      .single();
-    if (groupErr || !group) {
-      setSavingGroup(false);
-      return;
-    }
-    const mySlot = gamePlayers.find((p) => p.player_id === currentPlayerId);
-    await supabase.from("group_members").insert({
-      group_id: group.id,
-      player_id: currentPlayerId,
-      display_name: mySlot?.display_name ?? "Member",
-      is_anonymous: false,
-      sort_order: 0,
-    });
-    let so = 1;
-    for (const gp of gamePlayers) {
-      if (gp.player_id === currentPlayerId) continue;
-      await supabase.from("group_members").insert({
-        group_id: group.id,
-        player_id: gp.player_id ?? null,
-        display_name: gp.display_name,
-        is_anonymous: gp.player_id == null,
-        sort_order: so++,
-      });
-    }
-    setCreatedGroupId(group.id);
-    setSavingGroup(false);
-    setShowCreateGroup(false);
-    setShowDailyPrompt(true);
-  }, [currentPlayerId, gamePlayers, groupNameInput]);
-
-  const handleDailyChoice = useCallback(async (enable: boolean) => {
-    if (!createdGroupId) return;
-    setSavingDaily(true);
-    const supabase = createClient();
-    await supabase.from("saved_groups").update({ daily_game_enabled: enable }).eq("id", createdGroupId);
-    setSavingDaily(false);
-    setShowDailyPrompt(false);
-    setCreatedGroupId(null);
-  }, [createdGroupId]);
 
   // ---- Render ----
 

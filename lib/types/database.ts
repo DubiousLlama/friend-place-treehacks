@@ -54,6 +54,7 @@ export type Database = {
           submissions_lock_at: string | null;
           end_early_when_complete: boolean;
           group_id: string | null;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -68,6 +69,7 @@ export type Database = {
           submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
           group_id?: string | null;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -82,6 +84,7 @@ export type Database = {
           submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
           group_id?: string | null;
+          deleted_at?: string | null;
         };
         Relationships: [
           {
@@ -112,6 +115,7 @@ export type Database = {
           score: number | null;
           claimed_at: string | null;
           guesses_count: number;
+          invited_email: string | null;
         };
         Insert: {
           id?: string;
@@ -124,6 +128,7 @@ export type Database = {
           score?: number | null;
           claimed_at?: string | null;
           guesses_count?: number;
+          invited_email?: string | null;
         };
         Update: {
           id?: string;
@@ -136,6 +141,7 @@ export type Database = {
           score?: number | null;
           claimed_at?: string | null;
           guesses_count?: number;
+          invited_email?: string | null;
         };
         Relationships: [
           {
@@ -233,6 +239,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      device_daily_usage: {
+        Row: {
+          device_key: string;
+          date: string;
+          axes_generation_count: number;
+          invite_email_count: number;
+          user_agent: string | null;
+          ip_address: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          device_key: string;
+          date: string;
+          axes_generation_count?: number;
+          invite_email_count?: number;
+          user_agent?: string | null;
+          ip_address?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          device_key?: string;
+          date?: string;
+          axes_generation_count?: number;
+          invite_email_count?: number;
+          user_agent?: string | null;
+          ip_address?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       saved_groups: {
         Row: {
           id: string;
@@ -276,7 +315,7 @@ export type Database = {
           id: string;
           group_id: string;
           player_id: string | null;
-          display_name: string;
+          anonymous_display_name: string | null;
           is_anonymous: boolean;
           sort_order: number;
           joined_at: string;
@@ -285,7 +324,7 @@ export type Database = {
           id?: string;
           group_id: string;
           player_id?: string | null;
-          display_name: string;
+          anonymous_display_name?: string | null;
           is_anonymous?: boolean;
           sort_order?: number;
           joined_at?: string;
@@ -294,7 +333,7 @@ export type Database = {
           id?: string;
           group_id?: string;
           player_id?: string | null;
-          display_name?: string;
+          anonymous_display_name?: string | null;
           is_anonymous?: boolean;
           sort_order?: number;
           joined_at?: string;
@@ -316,6 +355,50 @@ export type Database = {
           },
         ];
       };
+      email_invites: {
+        Row: {
+          id: string;
+          target_type: "group" | "game";
+          target_id: string;
+          email: string;
+          token: string;
+          invited_by: string;
+          created_at: string;
+          expires_at: string;
+          suggested_display_name: string | null;
+        };
+        Insert: {
+          id?: string;
+          target_type: "group" | "game";
+          target_id: string;
+          email: string;
+          token: string;
+          invited_by: string;
+          created_at?: string;
+          expires_at: string;
+          suggested_display_name?: string | null;
+        };
+        Update: {
+          id?: string;
+          target_type?: "group" | "game";
+          target_id?: string;
+          email?: string;
+          token?: string;
+          invited_by?: string;
+          created_at?: string;
+          expires_at?: string;
+          suggested_display_name?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "email_invites_invited_by_fkey";
+            columns: ["invited_by"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_featured_tags: {
         Row: {
           id: string;
@@ -326,6 +409,7 @@ export type Database = {
           source_axis: "x" | "y" | null;
           sort_order: number;
           created_at: string;
+          awarded_at: string | null;
         };
         Insert: {
           id?: string;
@@ -336,6 +420,7 @@ export type Database = {
           source_axis?: "x" | "y" | null;
           sort_order?: number;
           created_at?: string;
+          awarded_at?: string | null;
         };
         Update: {
           id?: string;
@@ -346,6 +431,7 @@ export type Database = {
           source_axis?: "x" | "y" | null;
           sort_order?: number;
           created_at?: string;
+          awarded_at?: string | null;
         };
         Relationships: [
           {
@@ -373,6 +459,22 @@ export type Database = {
           p_force?: boolean;
         };
         Returns: Json;
+      };
+      soft_delete_game: {
+        Args: { p_game_id: string };
+        Returns: unknown;
+      };
+      check_game_invite_status: {
+        Args: { p_invite_code: string };
+        Returns: string | null;
+      };
+      increment_device_axes: {
+        Args: { p_device_key: string; p_date: string };
+        Returns: unknown;
+      };
+      increment_device_invites: {
+        Args: { p_device_key: string; p_date: string; p_count: number };
+        Returns: unknown;
       };
     };
     Enums: {

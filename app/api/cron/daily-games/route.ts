@@ -69,16 +69,21 @@ export async function GET(request: Request) {
 
       const { data: members } = await supabase
         .from("group_members")
-        .select("player_id, display_name")
+        .select("player_id, anonymous_display_name, players(display_name)")
         .eq("group_id", group.id)
         .order("sort_order", { ascending: true });
 
-      const slots = (members ?? []).map((m, i) => ({
-        game_id: game.id,
-        player_id: m.player_id,
-        display_name: m.display_name,
-        claimed_at: null,
-      }));
+      const slots = (members ?? []).map((m: { player_id: string | null; anonymous_display_name: string | null; players?: { display_name: string | null } | null }) => {
+        const displayName = m.player_id
+          ? (m.players?.display_name?.trim() ?? "Member")
+          : (m.anonymous_display_name?.trim() ?? "Guest");
+        return {
+          game_id: game.id,
+          player_id: m.player_id,
+          display_name: displayName,
+          claimed_at: null,
+        };
+      });
 
       const { error: slotsErr } = await supabase.from("game_players").insert(slots);
       if (slotsErr) continue;

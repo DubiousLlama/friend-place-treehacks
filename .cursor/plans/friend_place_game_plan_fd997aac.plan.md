@@ -175,12 +175,12 @@ Key design decisions:
 
 RLS is critical since clients talk directly to Supabase:
 
-- `**games**`: Anyone can `SELECT`. Authenticated users can `INSERT` (create games, `created_by = auth.uid()`). **Creator can `UPDATE`** (e.g. set `phase = 'results'` to end game) via policy "Creator can update game".
+- `**games**`: Anyone can `SELECT`. Authenticated users can `INSERT` (create games, `created_by = auth.uid()`). **Creator can `UPDATE**` (e.g. set `phase = 'results'` to end game) via policy "Creator can update game".
 - `**game_players**`:
   - `SELECT`: Anyone authenticated can read all game player rows.
   - `INSERT`: Creator can insert unclaimed name slots; any authenticated user can insert a row with `player_id = auth.uid()` ("+ add player").
   - `UPDATE`: Claim unclaimed row, or update own row (self-placement, display name, submission, `guesses_count`). **Unclaim:** policy allows setting `player_id = NULL` on own row (migration `20260214200000_allow_unclaim.sql`).
-- `**guesses**`: Players can `INSERT`, `UPDATE`, and **`DELETE`** their own guesses (for replace-all on submit). Players can `SELECT` their own guesses during placing (for re-entry) or all guesses in `results` phase. See migration `20260214100000_fix_guesses_rls.sql`.
+- `**guesses**`: Players can `INSERT`, `UPDATE`, and `**DELETE**` their own guesses (for replace-all on submit). Players can `SELECT` their own guesses during placing (for re-entry) or all guesses in `results` phase. See migration `20260214100000_fix_guesses_rls.sql`.
 - Service-role key bypasses RLS for scoring and phase transitions in API routes.
 
 ---

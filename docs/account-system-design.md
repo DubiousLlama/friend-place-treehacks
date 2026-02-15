@@ -1,4 +1,4 @@
-﻿# Account System Design — Friend Place
+# Account System Design — Friend Place
 
 This document brainstorms how a **persistent account system** could look for Friend Place, aligned with the [game plan](.cursor/plans/friend_place_game_plan_fd997aac.plan.md): **anonymous-first play**, with an **optional upgrade** so users can save history and recreate game groups.
 
@@ -95,7 +95,7 @@ No schema change required; just UX: “Use [X] as your name in new games?” and
 
 - **New table (optional):** e.g. `saved_groups`:
   - `id`, `owner_id` (→ `players.id`), `name` (e.g. “Roommates”), `created_at`.
-- **Group members:** `group_members`: `group_id`, `player_id` (nullable), `display_name`, `is_anonymous`, `sort_order`, `joined_at`. One row per member; linked users have `player_id` set, anonymous members have `player_id` null and `is_anonymous = true`.
+- **Group members:** `group_members`: `group_id`, `player_id` (nullable), `anonymous_display_name` (nullable), `is_anonymous`, `sort_order`, `joined_at`. One row per member; linked users have `player_id` set and their display name comes from `players.display_name`; anonymous members have `player_id` null and `anonymous_display_name` for the label.
 - **Flow:** After a game ends, “Save this group?” → name it → next time “Start game” can offer “Use saved group: Roommates” and pre-fill player names.
 - **Scope:** Only for users with a linked account (`auth.uid()` with email or OAuth). Anonymous users don’t see “Save group” or “Use saved group.”
 

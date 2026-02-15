@@ -3,6 +3,8 @@ import { Outfit, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AppNav } from "@/components/AppNav";
 import { AuthMergeChecker } from "@/components/AuthMergeChecker";
+import { DeviceConnect } from "@/components/DeviceConnect";
+import { DisplayNameChecker } from "@/components/DisplayNameChecker";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -36,6 +38,8 @@ export default function RootLayout({
           {children}
         </main>
         <AuthMergeChecker />
+        <DeviceConnect />
+        <DisplayNameChecker />
       </body>
     </html>
   );

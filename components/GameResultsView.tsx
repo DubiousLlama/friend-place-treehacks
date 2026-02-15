@@ -72,7 +72,6 @@ export function GameResultsView({
     await supabase.from("group_members").insert({
       group_id: group.id,
       player_id: currentPlayerId,
-      display_name: mySlot?.display_name ?? "Member",
       is_anonymous: false,
       sort_order: 0,
     });
@@ -82,7 +81,7 @@ export function GameResultsView({
       await supabase.from("group_members").insert({
         group_id: group.id,
         player_id: gp.player_id ?? null,
-        display_name: gp.display_name,
+        anonymous_display_name: gp.player_id == null ? gp.display_name : null,
         is_anonymous: gp.player_id == null,
         sort_order: sortOrder++,
       });
@@ -185,10 +184,10 @@ export function GameResultsView({
             Create another game
           </Link>
           <Link
-            href="/games"
+            href="/profile"
             className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
           >
-            My games
+            My profile
           </Link>
         </div>
       </div>

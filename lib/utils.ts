@@ -2,12 +2,32 @@ import { customAlphabet } from "nanoid";
 
 const alphanumeric = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const nanoid6 = customAlphabet(alphanumeric, 6);
+const tokenAlphabet = customAlphabet(alphanumeric + "-_", 32);
 
 /**
  * Generate a short, URL-safe invite code for game links.
  */
 export function generateInviteCode(): string {
   return nanoid6();
+}
+
+/** URL-safe token for email invite links (join?token=...). */
+export function generateInviteToken(): string {
+  return tokenAlphabet();
+}
+
+/**
+ * Mask email for display so raw addresses are not exposed to clients.
+ * e.g. "jane@example.com" -> "ja***@example.com"
+ */
+export function maskEmail(email: string): string {
+  const s = email.trim();
+  const at = s.indexOf("@");
+  if (at <= 0) return "***";
+  const local = s.slice(0, at);
+  const domain = s.slice(at);
+  if (local.length <= 2) return local + "***" + domain;
+  return local.slice(0, 2) + "***" + domain;
 }
 
 /**

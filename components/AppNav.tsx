@@ -22,28 +22,6 @@ function AccountIcon({ className }: { className?: string }) {
   );
 }
 
-function DieIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <rect x="4" y="4" width="16" height="16" rx="2" />
-      <circle cx="9" cy="9" r="1" fill="currentColor" />
-      <circle cx="15" cy="15" r="1" fill="currentColor" />
-      <circle cx="9" cy="15" r="1" fill="currentColor" />
-      <circle cx="15" cy="9" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
 function GroupsIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -78,42 +56,29 @@ export function AppNav() {
           >
             Friend Place
           </Link>
-          {!loading && isLinked && (
-            <>
-              <Link
-                href="/games"
-                className="flex items-center gap-1.5 text-sm text-secondary hover:text-foreground"
-                title="My games"
-                aria-label="My games"
-              >
-                <DieIcon className="h-4 w-4" />
-                My games
-              </Link>
-              <Link
-                href="/profile/groups"
-                className="flex items-center gap-1.5 text-sm text-secondary hover:text-foreground"
-                title="Groups"
-                aria-label="Groups"
-              >
-                <GroupsIcon className="h-4 w-4" />
-                Groups
-              </Link>
-            </>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {!loading && user && (
-            <>
-              <Link
-                href="/profile"
-                className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-secondary hover:bg-muted hover:text-foreground"
-                title="Me"
-                aria-label="Me"
-              >
-                <AccountIcon className="h-5 w-5 shrink-0" />
-                Me
-              </Link>
-            </>
+            <Link
+              href="/profile/groups"
+              className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-secondary hover:bg-muted hover:text-foreground"
+              title="Groups"
+              aria-label="Groups"
+            >
+              <GroupsIcon className="h-4 w-4" />
+              Groups
+            </Link>
+          )}
+          {!loading && user && (
+            <Link
+              href="/profile"
+              className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm text-secondary hover:bg-muted hover:text-foreground"
+              title="Me"
+              aria-label="Me"
+            >
+              <AccountIcon className="h-5 w-5 shrink-0" />
+              Me
+            </Link>
           )}
         </div>
       </nav>

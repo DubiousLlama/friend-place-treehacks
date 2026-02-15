@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { getGroupStreak } from "@/lib/streak-utils";
 import { AccountPrompt } from "@/components/AccountPrompt";
+import { GameGridPreview } from "@/components/GameGridPreview";
 
 function SettingsIcon({ className }: { className?: string }) {
   return (
@@ -55,6 +56,12 @@ interface CurrentGameEntry {
   };
   groupName: string;
   streak: number;
+  selfX: number | null;
+  selfY: number | null;
+  /** This user's game_players.id for this game (used to fetch their guesses). */
+  slotId: string | null;
+  /** Positions where this user placed others (guess_x, guess_y). */
+  otherPlacements: { x: number; y: number }[];
 }
 
 function getRankSuffix(n: number): string {
@@ -95,7 +102,27 @@ export default function ProfilePage() {
         .select("display_name")
         .eq("id", user.id)
         .single();
-      setDisplayName(player?.display_name ?? null);
+
+      let nameToShow: string | null = player?.display_name ?? null;
+      if (nameToShow == null || String(nameToShow).trim() === "") {
+        try {
+          const justSet = sessionStorage.getItem("fp-display-name-just-set");
+          if (justSet && justSet.trim()) {
+            sessionStorage.removeItem("fp-display-name-just-set");
+            nameToShow = justSet.trim();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (nameToShow == null || String(nameToShow).trim() === "") {
+        const meta = user?.user_metadata as Record<string, unknown> | undefined;
+        const fromAuth =
+          (typeof meta?.full_name === "string" && meta.full_name.trim()) ||
+          (typeof meta?.name === "string" && meta.name.trim());
+        if (fromAuth) nameToShow = (meta?.full_name as string)?.trim() || (meta?.name as string)?.trim();
+      }
+      setDisplayName(nameToShow);
 
       const { data: featuredRows } = await supabase
         .from("user_featured_tags")
@@ -124,15 +151,22 @@ export default function ProfilePage() {
         .eq("phase", "placing")
         .order("created_at", { ascending: false });
       const groupIds = [...new Set((placingGames ?? []).map((g) => g.group_id).filter(Boolean) as string[])];
-      let groupNames: Record<string, string> = {};
+      const groupNames: Record<string, string> = {};
       let allGroupGames: { created_at: string; group_id: string | null }[] = [];
       if (groupIds.length > 0) {
         const { data: grp } = await supabase.from("saved_groups").select("id, name").in("id", groupIds);
-        const { data: mems } = await supabase.from("group_members").select("group_id, display_name").in("group_id", groupIds).order("sort_order", { ascending: true });
+        const { data: mems } = await supabase
+          .from("group_members")
+          .select("group_id, player_id, anonymous_display_name, players(display_name)")
+          .in("group_id", groupIds)
+          .order("sort_order", { ascending: true });
         const membersByGroup = new Map<string, string[]>();
         for (const m of mems ?? []) {
+          const name = (m as { player_id: string | null; anonymous_display_name: string | null; players?: { display_name: string | null } | null }).player_id
+            ? ((m as { players?: { display_name: string | null } | null }).players?.display_name?.trim() ?? "Member")
+            : ((m as { anonymous_display_name: string | null }).anonymous_display_name?.trim() ?? "Guest");
           const list = membersByGroup.get(m.group_id) ?? [];
-          list.push(m.display_name);
+          list.push(name);
           membersByGroup.set(m.group_id, list);
         }
         for (const g of grp ?? []) {
@@ -141,23 +175,56 @@ export default function ProfilePage() {
         const { data: groupGames } = await supabase.from("games").select("created_at, group_id").in("group_id", groupIds);
         allGroupGames = (groupGames ?? []) as { created_at: string; group_id: string | null }[];
       }
-      const currentEntries: CurrentGameEntry[] = (placingGames ?? []).map((game) => ({
-        game,
-        groupName: game.group_id ? groupNames[game.group_id] ?? "—" : "—",
-        streak: getGroupStreak(allGroupGames, game.group_id),
-      }));
-      setCurrentGames(currentEntries);
+      const slotsByGameId = new Map((mySlots ?? []).map((s) => [s.game_id, s]));
+      const placingEntries: CurrentGameEntry[] = (placingGames ?? []).map((game) => {
+        const slot = slotsByGameId.get(game.id);
+        return {
+          game,
+          groupName: game.group_id ? groupNames[game.group_id] ?? "—" : "—",
+          streak: getGroupStreak(allGroupGames, game.group_id),
+          selfX: slot?.self_x ?? null,
+          selfY: slot?.self_y ?? null,
+          slotId: slot?.id ?? null,
+          otherPlacements: [],
+        };
+      });
+      const slotIds = placingEntries.map((e) => e.slotId).filter((id): id is string => id != null);
+      if (slotIds.length > 0) {
+        const { data: myGuesses } = await supabase
+          .from("guesses")
+          .select("guesser_game_player_id, guess_x, guess_y")
+          .in("guesser_game_player_id", slotIds);
+        const guessesBySlot = new Map<string, { x: number; y: number }[]>();
+        for (const g of myGuesses ?? []) {
+          const list = guessesBySlot.get(g.guesser_game_player_id) ?? [];
+          list.push({ x: g.guess_x, y: g.guess_y });
+          guessesBySlot.set(g.guesser_game_player_id, list);
+        }
+        placingEntries.forEach((entry) => {
+          if (entry.slotId) {
+            entry.otherPlacements = guessesBySlot.get(entry.slotId) ?? [];
+          }
+        });
+      }
+      setCurrentGames(placingEntries);
 
       const gamesMap = new Map((gamesData ?? []).map((g) => [g.id, g]));
       const pastGroupIds = [...new Set((gamesData ?? []).map((g) => (g as { group_id?: string | null }).group_id).filter(Boolean) as string[])];
-      let pastGroupNames: Record<string, string> = {};
+      const pastGroupNames: Record<string, string> = {};
       if (pastGroupIds.length > 0) {
         const { data: grp } = await supabase.from("saved_groups").select("id, name").in("id", pastGroupIds);
-        const { data: mems } = await supabase.from("group_members").select("group_id, display_name").in("group_id", pastGroupIds).order("sort_order", { ascending: true });
+        const { data: mems } = await supabase
+          .from("group_members")
+          .select("group_id, player_id, anonymous_display_name, players(display_name)")
+          .in("group_id", pastGroupIds)
+          .order("sort_order", { ascending: true });
         const membersByGroup = new Map<string, string[]>();
         for (const m of mems ?? []) {
+          const name = (m as { player_id: string | null; anonymous_display_name: string | null; players?: { display_name: string | null } | null }).player_id
+            ? ((m as { players?: { display_name: string | null } | null }).players?.display_name?.trim() ?? "Member")
+            : ((m as { anonymous_display_name: string | null }).anonymous_display_name?.trim() ?? "Guest");
           const list = membersByGroup.get(m.group_id) ?? [];
-          list.push(m.display_name);
+          list.push(name);
           membersByGroup.set(m.group_id, list);
         }
         for (const g of grp ?? []) {
@@ -262,6 +329,13 @@ export default function ProfilePage() {
     setFeaturedTags((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.refresh();
+    window.location.href = "/";
+  };
+
   if (authLoading || (!user && !authLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -272,40 +346,47 @@ export default function ProfilePage() {
 
   if (!isLinked) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-        <div className="text-center max-w-sm">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-6">
+        <div className="text-center max-w-md">
           <p className="text-foreground font-medium">
             You’re playing anonymously
           </p>
           <p className="mt-1 text-sm text-secondary">
-            Create an account or link with email/Google to see your profile, save game history, and use groups. You can sign out from Settings (gear icon on your account page).
+            While anonoymous, you can only play games on this device and will lose access to your games if you clear your cookies.
           </p>
         </div>
         <AccountPrompt />
-        <Link href="/" className="text-sm text-splash hover:underline">
-          Back home
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <Link href="/" className="text-sm text-splash hover:underline">
+            Back home
+          </Link>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="text-sm text-secondary hover:text-splash underline underline-offset-2"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center px-4 py-12 font-sans">
-      <div className="w-full max-w-lg flex justify-end -mt-2 mb-2">
-        <Link
-          href="/profile/settings"
-          className="rounded-lg border border-surface-muted p-2 text-secondary hover:border-splash hover:text-splash transition-colors"
-          title="Settings"
-          aria-label="Settings"
-        >
-          <SettingsIcon className="h-5 w-5" />
-        </Link>
-      </div>
-      <main className="w-full max-w-lg flex flex-col items-center gap-8">
+    <div className="relative flex min-h-screen flex-col items-center px-4 py-12 font-sans">
+      <Link
+        href="/profile/settings"
+        className="absolute top-4 right-4 p-2 text-secondary hover:text-splash transition-colors"
+        title="Settings"
+        aria-label="Settings"
+      >
+        <SettingsIcon className="h-5 w-5" />
+      </Link>
+      <main className="w-full max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl flex flex-col gap-8">
         {loading ? (
           <p className="text-secondary">Loading...</p>
         ) : (
-          <div className="w-full rounded-xl border border-surface-muted bg-white p-6 flex flex-col gap-6">
+          <div className="w-full flex flex-col gap-6">
             <div className="flex flex-col gap-2 text-center">
               <h1 className="text-2xl font-bold tracking-tight text-black">
                 {displayName ?? "Account"}
@@ -313,6 +394,13 @@ export default function ProfilePage() {
               <p className="text-sm text-secondary">
                 {user?.email ?? "Signed in"}
               </p>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="text-sm text-secondary hover:text-splash underline underline-offset-2"
+              >
+                Sign out
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-2">
@@ -332,14 +420,16 @@ export default function ProfilePage() {
                     </button>
                   </span>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => setShowAddTagModal(true)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-surface-muted text-secondary hover:bg-surface-muted hover:text-black transition-colors"
-                  aria-label="Add tag"
-                >
-                  +
-                </button>
+                {candidateTags.some((c) => !featuredTags.some((f) => f.label === c.label && f.game_id === c.game_id)) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddTagModal(true)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-surface-muted text-secondary hover:bg-surface-muted hover:text-black transition-colors"
+                    aria-label="Add tag"
+                  >
+                    +
+                  </button>
+                )}
             </div>
 
             {showAddTagModal && (
@@ -377,71 +467,58 @@ export default function ProfilePage() {
               </div>
             )}
 
-            <section className="flex flex-col gap-2 items-center">
+            <section className="flex flex-col gap-2 text-left">
               <h2 className="text-lg font-semibold text-black">
                 Current games
               </h2>
-              {currentGames.length === 0 ? (
-                <p className="text-sm text-secondary">
-                  No active games. Start or join a game to see it here.
-                </p>
-              ) : (
-                <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-2 w-full flex justify-center">
-                  <div className="flex flex-col gap-3 min-w-max w-max">
-                    <div className="flex gap-3">
-                      {currentGames.filter((_, i) => i % 2 === 0).map((entry) => (
-                      <Link
-                        key={entry.game.id}
-                        href={`/play/${entry.game.invite_code}`}
-                        className="block w-48 shrink-0 rounded-lg border border-surface-muted bg-surface p-3 text-black hover:bg-surface-muted transition-colors"
-                      >
-                        <div className="text-sm font-medium truncate">
-                          {entry.game.axis_x_label_low}–{entry.game.axis_x_label_high}
-                        </div>
-                        <div className="text-xs text-secondary truncate mt-0.5">
-                          {entry.game.axis_y_label_low}–{entry.game.axis_y_label_high}
-                        </div>
-                        <div className="text-xs text-secondary mt-1 truncate" title={entry.groupName}>
-                          {entry.groupName || "—"}
-                        </div>
-                        {entry.streak > 0 && (
-                          <div className="text-xs text-splash mt-0.5">
-                            {entry.streak}-day streak
-                          </div>
-                        )}
-                      </Link>
-                    ))}
-                  </div>
-                  <div className="flex gap-3">
-                    {currentGames.filter((_, i) => i % 2 === 1).map((entry) => (
-                      <Link
-                        key={entry.game.id}
-                        href={`/play/${entry.game.invite_code}`}
-                        className="block w-48 shrink-0 rounded-lg border border-surface-muted bg-surface p-3 text-black hover:bg-surface-muted transition-colors"
-                      >
-                        <div className="text-sm font-medium truncate">
-                          {entry.game.axis_x_label_low}–{entry.game.axis_x_label_high}
-                        </div>
-                        <div className="text-xs text-secondary truncate mt-0.5">
-                          {entry.game.axis_y_label_low}–{entry.game.axis_y_label_high}
-                        </div>
-                        <div className="text-xs text-secondary mt-1 truncate" title={entry.groupName}>
-                          {entry.groupName || "—"}
-                        </div>
-                        {entry.streak > 0 && (
-                          <div className="text-xs text-splash mt-0.5">
-                            {entry.streak}-day streak
-                          </div>
-                        )}
-                      </Link>
-                    ))}
-                  </div>
+              <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-2 w-full">
+                <div className="flex gap-3 min-w-max w-max">
+                  <Link
+                    href="/create"
+                    className="relative flex shrink-0 w-32 h-32 rounded-lg border border-dashed border-surface-muted bg-surface text-secondary hover:border-splash hover:text-splash transition-colors overflow-hidden"
+                    aria-label="New game"
+                  >
+                    <div className="w-full h-full p-1.5">
+                      <GameGridPreview
+                        axisXLow=""
+                        axisXHigh=""
+                        axisYLow=""
+                        axisYHigh=""
+                        selfPosition={null}
+                        otherPositions={[]}
+                      />
+                    </div>
+                    <span className="absolute inset-0 flex items-center justify-center text-sm font-medium text-secondary pointer-events-none">
+                      New
+                    </span>
+                  </Link>
+                  {currentGames.map((entry) => (
+                    <Link
+                      key={entry.game.id}
+                      href={`/play/${entry.game.invite_code}`}
+                      className="flex shrink-0 w-32 h-32 rounded-lg bg-surface text-black hover:bg-surface-muted transition-colors overflow-hidden"
+                    >
+                      <div className="w-full h-full p-1.5">
+                        <GameGridPreview
+                          axisXLow={entry.game.axis_x_label_low}
+                          axisXHigh={entry.game.axis_x_label_high}
+                          axisYLow={entry.game.axis_y_label_low}
+                          axisYHigh={entry.game.axis_y_label_high}
+                          selfPosition={
+                            entry.selfX != null && entry.selfY != null
+                              ? { x: entry.selfX, y: entry.selfY }
+                              : null
+                          }
+                          otherPositions={entry.otherPlacements}
+                        />
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-                </div>
-              )}
+              </div>
             </section>
 
-            <section className="flex flex-col gap-2 items-center">
+            <section className="flex flex-col gap-2 text-left">
               <h2 className="text-lg font-semibold text-black">
                 Past games
               </h2>
@@ -450,7 +527,7 @@ export default function ProfilePage() {
                   No games yet. Play a game and come back after it ends.
                 </p>
               ) : (
-                <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-2 w-full flex justify-center">
+                <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-2 w-full">
                   <div className="flex flex-col gap-3 min-w-max w-max">
                     <div className="flex gap-3">
                       {scoreHistory.filter((_, i) => i % 2 === 0).map((entry) => (

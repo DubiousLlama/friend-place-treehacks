@@ -6,6 +6,13 @@ import {
   buildRegenerateOneAxisPrompt,
   type AxisSuggestion,
 } from "@/lib/ai/prompts";
+import {
+  getDeviceKey,
+  getOrCreateDailyUsage,
+  incrementAxesUsed,
+} from "@/lib/device-usage";
+
+const DAILY_AXES_LIMIT = 10;
 
 type AxisKind = "horizontal" | "vertical";
 
@@ -39,6 +46,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const deviceKey = getDeviceKey(request);
+    const usage = await getOrCreateDailyUsage(deviceKey, request);
+    if (usage.axes_count >= DAILY_AXES_LIMIT) {
+      return NextResponse.json(
+        {
+          error: "Daily limit of 10 axis generations reached. Resets at midnight UTC.",
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
     const axis = (body.axis as AxisKind) || "horizontal";
     const currentAxes = body.currentAxes as AxisSuggestion | undefined;
@@ -84,21 +102,30 @@ export async function POST(request: NextRequest) {
     }
 
     if (axis === "horizontal") {
-      const xLow = result.x_low?.trim();
-      const xHigh = result.x_high?.trim();
-      if (!xLow || !xHigh) {
+      if (!("x_low" in result) || !("x_high" in result)) {
         console.error("[suggest-axes] horizontal response missing fields:", result);
         return json500("Failed to generate horizontal axes", JSON.stringify(result));
       }
+      const xLow = result.x_low.trim();
+      const xHigh = result.x_high.trim();
+      if (!xLow || !xHigh) {
+        return json500("Failed to generate horizontal axes", JSON.stringify(result));
+      }
+      await incrementAxesUsed(deviceKey);
       return NextResponse.json({ x_low: xLow, x_high: xHigh });
     }
 
-    const yLow = result.y_low?.trim();
-    const yHigh = result.y_high?.trim();
+    if (!("y_low" in result) || !("y_high" in result)) {
+      console.error("[suggest-axes] vertical response missing fields:", result);
+      return json500("Failed to generate vertical axes", JSON.stringify(result));
+    }
+    const yLow = result.y_low.trim();
+    const yHigh = result.y_high.trim();
     if (!yLow || !yHigh) {
       console.error("[suggest-axes] vertical response missing fields:", result);
       return json500("Failed to generate vertical axes", JSON.stringify(result));
     }
+    await incrementAxesUsed(deviceKey);
     return NextResponse.json({ y_low: yLow, y_high: yHigh });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
