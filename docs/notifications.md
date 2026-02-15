@@ -6,7 +6,8 @@ AI-generated reminders (email via Resend by default; optional SMS or browser pus
 
 1. **New game invite** — When a linked user is added to a game (`game_players` INSERT with `player_id` set), they receive an email (or SMS if channel is `sms`) with axis context (AI-generated).
 2. **Mid-game nudge** — When ≥45% of players have submitted and the game started 2+ hours ago, remaining players get a teaser. Re-evaluated on each submission (DB webhook) and by cron.
-3. **Results reminder** — When a game is in results and a player has not viewed results (and game created 1+ hour ago), they get a hint (cron).
+3. **Results reminder (immediate)** — When a game **transitions to results** (`games` table UPDATE, `phase` → `results`), players who haven’t viewed yet get an email right away via the `notify-game-ended` webhook.
+4. **Results reminder (catch-up)** — Cron runs `notify-stale-check`; for games in results that were created 1+ hour ago, any player who still hasn’t viewed (and wasn’t already notified) gets a reminder.
 
 ## Database
 
@@ -18,7 +19,8 @@ AI-generated reminders (email via Resend by default; optional SMS or browser pus
 ## Edge Functions
 
 - **`notify-game-event`** — Invoked by Database Webhooks on `game_players` (INSERT and UPDATE). Handles new-game-invite and mid-game-nudge when someone submits.
-- **`notify-stale-check`** — Invoked by cron (e.g. every 30 min). Catches mid-game nudges and results reminders.
+- **`notify-game-ended`** — Invoked by Database Webhooks on `games` (UPDATE). When `phase` changes to `results`, immediately sends results reminder to players who haven’t viewed yet.
+- **`notify-stale-check`** — Invoked by cron (e.g. every 30 min). Catches mid-game nudges and results-reminder catch-up (games in results 1+ hour old).
 
 ## Email (Resend) — default
 
@@ -49,14 +51,33 @@ Notifications are sent by **email** using [Resend](https://resend.com). Recipien
 
 ## Webhook and Cron Setup (Supabase Dashboard)
 
-1. **Database Webhooks**  
-   - Table: `game_players`  
-   - Events: Insert, Update  
-   - URL: `https://<project-ref>.supabase.co/functions/v1/notify-game-event`  
-   - HTTP method: POST  
+In **Database** → **Webhooks** (or the webhook section in your Supabase project):
 
-2. **Cron**  
-   - Use Supabase Cron (or pg_cron) to call `notify-stale-check` every 30 minutes (POST or GET to the function URL).
+### Webhook 1: Game ended (immediate results reminder)
+
+- **Conditions to fire webhook**
+  - **Table:** `games`
+  - **Events:** check **Update** only (Insert / Delete unchecked).
+- **Type of webhook:** **HTTP Request**
+- **HTTP Request**
+  - **Method:** POST
+  - **URL:** `https://uggjsgncyfmmfmlfjbpo.supabase.co/functions/v1/notify-game-ended`  
+    (Use your project ref if different.)
+
+When a game’s row is updated (e.g. `phase` changes to `results`), Supabase sends the new row to this URL and the function emails players who haven’t viewed yet.
+
+### Webhook 2: Game players (new invite + mid-game nudge)
+
+- **Table:** `game_players`
+- **Events:** **Insert** and **Update**
+- **Type:** HTTP Request, **Method:** POST  
+- **URL:** `https://uggjsgncyfmmfmlfjbpo.supabase.co/functions/v1/notify-game-event`
+
+### Cron
+
+- Call `notify-stale-check` every 30 minutes (Supabase Cron or external scheduler):  
+  `https://uggjsgncyfmmfmlfjbpo.supabase.co/functions/v1/notify-stale-check`  
+  (POST or GET.)
 
 ## Switching to SMS or Browser Push
 

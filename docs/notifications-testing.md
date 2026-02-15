@@ -2,10 +2,24 @@
 
 ## How it deploys
 
-- **Vercel** (via merge to `main`): deploys the **Next.js app** (profile, play page with `results_viewed_at`, AuthModal, etc.). The app does not run the notification logic.
-- **Supabase**: **Edge Functions** (`notify-game-event`, `notify-stale-check`) run on Supabase. Deploy them with `supabase functions deploy`. Database webhooks and cron also live in Supabase.
+- **Vercel** (via merge to `main`): deploys the **Next.js app** only. It does **not** send notification emails.
+- **Supabase Edge Functions** (`notify-game-event`, `notify-stale-check`) run on **Supabase’s servers**. They are the only thing that call Resend. So:
+  - No record in Resend usually means the Edge Function either wasn’t invoked or didn’t reach the Resend call (see Troubleshooting below).
+  - Secrets for Resend must be set in **Supabase** (Project Settings → Edge Functions → Secrets), not only in `.env.local`. `.env.local` is for the Next.js app; Edge Functions don’t see it.
 
-So after merging to main you have the latest app on Vercel. Notifications only work after you deploy the edge functions and configure webhooks/cron in Supabase.
+## Test Resend locally (no Vercel, no Supabase functions)
+
+To confirm Resend works without deploying anything:
+
+1. In your project root `.env.local`, add:
+   - `RESEND_API_KEY` — your Resend API key (starts with `re_`)
+   - `RESEND_FROM_EMAIL` — e.g. `Friend Place <onboarding@resend.dev>` or your verified sender
+2. From the project root run: `npm run dev`
+3. In another terminal (or Postman):
+   ```bash
+   curl -X POST http://localhost:3000/api/notifications/test -H "Content-Type: application/json" -d "{\"to\":\"your@email.com\"}"
+   ```
+4. You should get `{"ok":true,"id":"..."}` and see the email in Resend’s dashboard and in the inbox. If you get an error, the response body will say why (e.g. missing key, invalid from address).
 
 ## Pre-flight checklist (before testing)
 
@@ -43,6 +57,30 @@ So after merging to main you have the latest app on Vercel. Notifications only w
 
 ## Troubleshooting
 
-- **No email:** Confirm recipient has an email in Supabase Auth (linked account). Check Resend dashboard for bounces/errors. Check Edge Function logs in Supabase Dashboard → Edge Functions → Logs.
+### No record in Resend
+
+1. **Secrets are in Supabase, not only .env.local**  
+   Edge Functions run on Supabase and only see **Supabase secrets**. In Dashboard → Project Settings → Edge Functions → Secrets, set:
+   - `RESEND_API_KEY`
+   - `RESEND_FROM_EMAIL`
+   - `ANTHROPIC_API_KEY` (for AI text)
+   - Optionally `NOTIFICATION_CHANNEL=email`
+
+2. **Function was never invoked**  
+   - Results reminder: something must call `notify-stale-check` (cron or manual curl). If you never set up cron and never called it, no email is sent.
+   - New game invite: the `game_players` INSERT webhook must point to `notify-game-event`. If the webhook isn’t set or the URL is wrong, the function won’t run.
+
+3. **Results reminder: 1-hour rule**  
+   `notify-stale-check` only sends results reminders for games where `games.created_at` is **at least 1 hour ago**. Newly finished games won’t get a reminder until an hour has passed (or you change the code / call the function with a test payload).
+
+4. **No eligible recipient**  
+   For email, the recipient must be a **linked** user (not anonymous) with an email in Supabase Auth. The function looks up the email via `auth.admin.getUserById(player_id)`.
+
+5. **Check Edge Function logs**  
+   Supabase Dashboard → Edge Functions → select `notify-stale-check` or `notify-game-event` → Logs. Look for errors (e.g. "RESEND_API_KEY is not set", "Resend API 403", or errors before the send).
+
+### Other checks
+
+- **No email in inbox:** Confirm recipient has an email in Supabase Auth (linked account). Check Resend dashboard for bounces/errors and Edge Function logs.
 - **Results reminder never sent:** Ensure game is in `results`, `created_at` is at least 1 hour ago, and the player’s `game_players.results_viewed_at` is null. Then trigger `notify-stale-check` (cron or manual curl).
 - **Webhook not firing:** In Supabase Dashboard → Database → Webhooks, confirm the `game_players` webhook is enabled and the URL is correct.
