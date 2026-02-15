@@ -1,20 +1,174 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generateInviteCode } from "@/lib/utils";
+import { useAuth } from "@/lib/use-auth";
+import type { Database } from "@/lib/types/database";
+
+type SavedGroup = Database["public"]["Tables"]["saved_groups"]["Row"];
+type SavedGroupMember = Database["public"]["Tables"]["saved_group_members"]["Row"];
+
+// ── localStorage helpers for rate-limiting regenerations ──
+const REGEN_COUNT_KEY = "fp-regen-count";
+const REGEN_DATE_KEY = "fp-regen-date";
+const MAX_REGENS = 2;
+
+function getRegensUsedToday(): number {
+  if (typeof window === "undefined") return 0;
+  const storedDate = localStorage.getItem(REGEN_DATE_KEY);
+  const today = new Date().toISOString().slice(0, 10);
+  if (storedDate !== today) {
+    localStorage.setItem(REGEN_DATE_KEY, today);
+    localStorage.setItem(REGEN_COUNT_KEY, "0");
+    return 0;
+  }
+  return parseInt(localStorage.getItem(REGEN_COUNT_KEY) ?? "0", 10);
+}
+
+function incrementRegenCount(): void {
+  const today = new Date().toISOString().slice(0, 10);
+  localStorage.setItem(REGEN_DATE_KEY, today);
+  const current = getRegensUsedToday();
+  localStorage.setItem(REGEN_COUNT_KEY, String(current + 1));
+}
+
+interface AxisSuggestion {
+  x_low: string;
+  x_high: string;
+  y_low: string;
+  y_high: string;
+}
 
 export default function Home() {
   const router = useRouter();
+  const { user, isLinked } = useAuth();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedGroups, setSavedGroups] = useState<SavedGroup[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   // Axis labels
   const [xLow, setXLow] = useState("");
   const [xHigh, setXHigh] = useState("");
   const [yLow, setYLow] = useState("");
   const [yHigh, setYHigh] = useState("");
+
+  // AI axis state
+  const [dailyAxes, setDailyAxes] = useState<AxisSuggestion | null>(null);
+  const [loadingAxes, setLoadingAxes] = useState(true);
+  const [regeneratingAxis, setRegeneratingAxis] = useState<"horizontal" | "vertical" | null>(null);
+  const [regensLeft, setRegensLeft] = useState(MAX_REGENS);
+  const [lastHorizontalPair, setLastHorizontalPair] = useState<{ low: string; high: string } | null>(null);
+  const [lastVerticalPair, setLastVerticalPair] = useState<{ low: string; high: string } | null>(null);
+  const [pastGameAxes, setPastGameAxes] = useState<string[]>([]);
+
+  // Fetch current user's recent game axes for better regenerate suggestions
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    supabase
+      .from("games")
+      .select("axis_x_label_low, axis_x_label_high, axis_y_label_low, axis_y_label_high")
+      .eq("created_by", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5)
+      .then(({ data }) => {
+        if (!data?.length) return;
+        const formatted = data.map(
+          (g) =>
+            `${g.axis_x_label_low} ↔ ${g.axis_x_label_high} | ${g.axis_y_label_low} ↔ ${g.axis_y_label_high}`,
+        );
+        setPastGameAxes(formatted);
+      });
+  }, [user?.id]);
+
+  // Fetch saved groups when linked
+  useEffect(() => {
+    if (!isLinked || !user) return;
+    const supabase = createClient();
+    supabase
+      .from("saved_groups")
+      .select("id, name")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setSavedGroups((data as SavedGroup[]) ?? []));
+  }, [isLinked, user]);
+
+  // Load group members when a group is selected
+  useEffect(() => {
+    if (!selectedGroupId) return;
+    const supabase = createClient();
+    supabase
+      .from("saved_group_members")
+      .select("display_name, sort_order")
+      .eq("group_id", selectedGroupId)
+      .order("sort_order", { ascending: true })
+      .then(({ data }) => {
+        const names = (data as SavedGroupMember[] ?? []).map((m) => m.display_name);
+        setPlayerNames(names.length ? names.map((n) => n) : [""]);
+      });
+  }, [selectedGroupId]);
+
+  // Fetch daily axis on mount → prefill inputs
+  useEffect(() => {
+    setRegensLeft(MAX_REGENS - getRegensUsedToday());
+
+    fetch("/api/ai/daily-axis")
+      .then((res) => res.json())
+      .then((data: AxisSuggestion & { source?: string }) => {
+        setDailyAxes(data);
+        // Pre-fill inputs with the daily axes
+        setXLow(data.x_low);
+        setXHigh(data.x_high);
+        setYLow(data.y_low);
+        setYHigh(data.y_high);
+      })
+      .catch(() => {
+        // Silently fail — user can still type manually
+      })
+      .finally(() => setLoadingAxes(false));
+  }, []);
+
+  const handleRegenerateAxis = useCallback(
+    async (axis: "horizontal" | "vertical") => {
+      if (regensLeft <= 0 || regeneratingAxis) return;
+      setRegeneratingAxis(axis);
+      setError(null);
+      try {
+        const previousPair = axis === "horizontal" ? lastHorizontalPair : lastVerticalPair;
+        const res = await fetch("/api/ai/suggest-axes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            axis,
+            currentAxes: { x_low: xLow, x_high: xHigh, y_low: yLow, y_high: yHigh },
+            dailyAxes,
+            previousPair: previousPair ?? undefined,
+            pastGameAxes: pastGameAxes.length ? pastGameAxes : undefined,
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to generate");
+        const data = await res.json();
+        if (axis === "horizontal") {
+          setXLow(data.x_low);
+          setXHigh(data.x_high);
+          setLastHorizontalPair({ low: data.x_low, high: data.x_high });
+        } else {
+          setYLow(data.y_low);
+          setYHigh(data.y_high);
+          setLastVerticalPair({ low: data.y_low, high: data.y_high });
+        }
+        incrementRegenCount();
+        setRegensLeft((n) => n - 1);
+      } catch {
+        setError("Couldn't generate new axes. You can still type your own!");
+      } finally {
+        setRegeneratingAxis(null);
+      }
+    },
+    [regensLeft, regeneratingAxis, xLow, xHigh, yLow, yHigh, dailyAxes, lastHorizontalPair, lastVerticalPair, pastGameAxes],
+  );
 
   // Player names (name-slot pattern)
   const [playerNames, setPlayerNames] = useState<string[]>([""]);
@@ -175,7 +329,7 @@ export default function Home() {
 
         <form
           onSubmit={handleCreateGame}
-          className="w-full rounded-xl border border-surface-muted bg-white p-6 flex flex-col gap-6"
+          className="w-full min-w-0 max-w-lg rounded-xl border border-surface-muted bg-white p-6 flex flex-col gap-6"
         >
           <h2 className="text-lg font-semibold text-black">
             Create a game
@@ -196,60 +350,145 @@ export default function Home() {
             />
           </div>
 
-          {/* Axis labels */}
-          <div className="flex flex-col gap-4">
+          {/* Axis labels — constrained width so no horizontal scroll on mobile */}
+          <div className="flex flex-col gap-4 min-w-0">
             <p className="text-sm text-secondary">
-              Set the two axes of the chart. Each axis has two ends.
+              {loadingAxes ? "Loading today's axes..." : "Today's axes – edit or use the reload next to each axis."}
             </p>
 
-            <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium text-black mb-1">
-                Horizontal
-              </legend>
-              <div className="flex gap-2">
+            <fieldset className="flex flex-col gap-2 min-w-0">
+              <div className="flex items-center gap-2">
+                <legend className="text-sm font-medium text-black">
+                  Horizontal
+                </legend>
+                {!loadingAxes && (
+                  <button
+                    type="button"
+                    onClick={() => handleRegenerateAxis("horizontal")}
+                    disabled={regeneratingAxis !== null || regensLeft <= 0}
+                    className="inline-flex items-center justify-center rounded-lg border border-surface-muted p-1.5 text-secondary hover:border-splash hover:text-splash disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title={
+                      regensLeft <= 0
+                        ? "No regenerations left today"
+                        : `New horizontal axis (${regensLeft} left today)`
+                    }
+                    aria-label={regensLeft <= 0 ? "No regenerations left" : "Regenerate horizontal axis"}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={regeneratingAxis === "horizontal" ? "animate-spin" : ""}
+                    >
+                      <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2 min-w-0">
                 <input
                   type="text"
                   value={xLow}
                   onChange={(e) => setXLow(e.target.value)}
-                  placeholder="Left (e.g. Introvert)"
-                  maxLength={40}
-                  className="flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
+                  placeholder="Left"
+                  maxLength={20}
+                  className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
                 />
                 <input
                   type="text"
                   value={xHigh}
                   onChange={(e) => setXHigh(e.target.value)}
-                  placeholder="Right (e.g. Extrovert)"
-                  maxLength={40}
-                  className="flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
+                  placeholder="Right"
+                  maxLength={20}
+                  className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
                 />
               </div>
             </fieldset>
 
-            <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium text-black mb-1">
-                Vertical
-              </legend>
-              <div className="flex gap-2">
+            <fieldset className="flex flex-col gap-2 min-w-0">
+              <div className="flex items-center gap-2">
+                <legend className="text-sm font-medium text-black">
+                  Vertical
+                </legend>
+                {!loadingAxes && (
+                  <button
+                    type="button"
+                    onClick={() => handleRegenerateAxis("vertical")}
+                    disabled={regeneratingAxis !== null || regensLeft <= 0}
+                    className="inline-flex items-center justify-center rounded-lg border border-surface-muted p-1.5 text-secondary hover:border-splash hover:text-splash disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title={
+                      regensLeft <= 0
+                        ? "No regenerations left today"
+                        : `New vertical axis (${regensLeft} left today)`
+                    }
+                    aria-label={regensLeft <= 0 ? "No regenerations left" : "Regenerate vertical axis"}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={regeneratingAxis === "vertical" ? "animate-spin" : ""}
+                    >
+                      <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2 min-w-0">
                 <input
                   type="text"
                   value={yLow}
                   onChange={(e) => setYLow(e.target.value)}
-                  placeholder="Bottom (e.g. Night owl)"
-                  maxLength={40}
-                  className="flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
+                  placeholder="Bottom"
+                  maxLength={20}
+                  className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
                 />
                 <input
                   type="text"
                   value={yHigh}
                   onChange={(e) => setYHigh(e.target.value)}
-                  placeholder="Top (e.g. Early bird)"
-                  maxLength={40}
-                  className="flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
+                  placeholder="Top"
+                  maxLength={20}
+                  className="min-w-0 flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
                 />
               </div>
             </fieldset>
           </div>
+
+          {/* Saved group (if signed in) */}
+          {isLinked && savedGroups.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-black">
+                Start from a saved group
+              </label>
+              <select
+                value={selectedGroupId ?? ""}
+                onChange={(e) =>
+                  setSelectedGroupId(e.target.value || null)
+                }
+                className="rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black"
+              >
+                <option value="">None</option>
+                {savedGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Player names */}
           <div className="flex flex-col gap-3">

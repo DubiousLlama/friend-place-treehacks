@@ -24,16 +24,19 @@ export type Database = {
           id: string;
           display_name: string | null;
           created_at: string;
+          linked_at: string | null;
         };
         Insert: {
           id: string;
           display_name?: string | null;
           created_at?: string;
+          linked_at?: string | null;
         };
         Update: {
           id?: string;
           display_name?: string | null;
           created_at?: string;
+          linked_at?: string | null;
         };
         Relationships: [];
       };
@@ -186,6 +189,94 @@ export type Database = {
             columns: ["target_game_player_id"];
             isOneToOne: false;
             referencedRelation: "game_players";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      daily_axes: {
+        Row: {
+          id: string;
+          date: string;
+          axis_x_label_low: string;
+          axis_x_label_high: string;
+          axis_y_label_low: string;
+          axis_y_label_high: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          date?: string;
+          axis_x_label_low: string;
+          axis_x_label_high: string;
+          axis_y_label_low: string;
+          axis_y_label_high: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          date?: string;
+          axis_x_label_low?: string;
+          axis_x_label_high?: string;
+          axis_y_label_low?: string;
+          axis_y_label_high?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      saved_groups: {
+        Row: {
+          id: string;
+          owner_id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          owner_id?: string;
+          name?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "saved_groups_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      saved_group_members: {
+        Row: {
+          id: string;
+          group_id: string;
+          display_name: string;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          display_name: string;
+          sort_order?: number;
+        };
+        Update: {
+          id?: string;
+          group_id?: string;
+          display_name?: string;
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "saved_group_members_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "saved_groups";
             referencedColumns: ["id"];
           },
         ];

@@ -33,6 +33,7 @@ We’re building a daily online game in the style of wordle, except it is about 
 - **Name identity:** Token shows user display name (not "YOU"). **Edit name** updates `display_name` for same slot; **Switch name** unclaims slot and returns to name picker. RLS allows unclaim via migration `20260214200000_allow_unclaim.sql`.
 - **Host controls:** Creator can **end game** (set `phase = 'results'`) from dashboard and game info panel. RLS: "Creator can update game". Everyone sees **placement counts** per player (`game_players.guesses_count`); migration `20260214300000_host_controls.sql` adds column and games UPDATE policy.
 - **Phase 4 partial:** Submit is client-side (no API submit route). Host can end game manually; no cron for time-based end. Scoring not implemented.
+- **AI axis generation:** Daily axis (GET `/api/ai/daily-axis`) and suggest/regenerate axes (POST `/api/ai/suggest-axes`) via Anthropic Claude. Config in `lib/ai/config.ts`, prompts in `lib/ai/prompts.ts` (system prompt: `AXIS_SYSTEM_PROMPT`). Requires `ANTHROPIC_API_KEY` in `.env.local`. Credits-low returns 402; see `docs/ai-setup.md` for full setup and billing.
 
 ---
 
@@ -312,6 +313,9 @@ app/
     [inviteCode]/
       page.tsx                (main game page — name selection / placing / results)
   api/
+    ai/
+      daily-axis/route.ts     (GET: daily axis for landing page; uses daily_axes table)
+      suggest-axes/route.ts   (POST: suggest or regenerate axes; returns 402 on credits low)
     games/
       [id]/
         submit/route.ts       (POST: submit placements, trigger scoring + early end check)
@@ -332,6 +336,11 @@ lib/
     server.ts                 (server-side Supabase client via @supabase/ssr)
     middleware.ts              (refresh session cookie on each request)
     admin.ts                  (admin client using service-role key)
+  ai/
+    config.ts                 (AI_ENABLED, ANTHROPIC_API_KEY, per-feature toggles; isAIAvailable())
+    provider.ts               (Anthropic client, generateText; credits-low ? ANTHROPIC_CREDITS_LOW)
+    context.ts                (seasonal/date context for prompts)
+    prompts.ts                (AXIS_SYSTEM_PROMPT, buildDailyAxisPrompt, buildRegenerateOneAxisPrompt)
   scoring.ts                  (scoring algorithm — called from API route)
   utils.ts                    (shared utilities)
   types.ts                    (TypeScript types generated from Supabase schema)
@@ -358,7 +367,7 @@ The build is broken into 6 phases, each producing a working increment:
 - Create Supabase client helpers: `lib/supabase/client.ts` (browser), `lib/supabase/server.ts` (SSR/API routes via `@supabase/ssr`)
 - Set up Next.js `middleware.ts` to refresh the Supabase session cookie on each request
 - Generate TypeScript types from the Supabase schema (`npx supabase gen types typescript`)
-- Set environment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- Set environment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. For AI axis features (optional): `ANTHROPIC_API_KEY` in `.env.local` ? see `docs/ai-setup.md` for Anthropic console setup, workspace/credits, and prompts.
 
 ### Phase 2: Game Creation + Name-Claiming Join Flow
 
@@ -393,7 +402,8 @@ The build is broken into 6 phases, each producing a working increment:
 - Scoreboard with rankings
 - Animated reveal: show where each player placed themselves, then show where others guessed
 - Visual comparison (lines from guess to actual position, color-coded by accuracy)
-- `AccountPrompt` component: prompt users to link their anonymous account to email/OAuth (via `supabase.auth.updateUser()` or `linkIdentity()`) so they can save score history and easily recreate game groups
+- `AccountPrompt` component: prompt users to link their anonymous account to email or Google. Opens `AuthModal`: ?Continue with Google? or email form. Sign-up: email + Create password + Confirm password (required, must match), ?Create account? button; toggle ?Don?t have an account? Create one.? Sign-in: email + password, ?Sign in.? Uses `signUp()` / `signInWithPassword()` for email and `signInWithOAuth()` for Google. Merge flow (see `docs/account-testing-and-debugging.md`) moves anonymous game data into the linked account.
+- **Account security & privacy:** Auth callback sanitizes `next` (no open redirect). Merge API validates `fromUserId` as UUID and allows only anonymous identities (see `docs/security-and-privacy.md`).
 
 ### Phase 6: Polish + Deploy
 
@@ -402,5 +412,5 @@ The build is broken into 6 phases, each producing a working increment:
 - Vercel deployment configuration + Supabase environment variables
 - Vercel Cron job for transitioning games past `submissions_lock_at`
 - OG image / share metadata for invite links
-- Optional: Supabase Edge Function or Vercel Cron for daily axis pair generation
+- AI axis generation is implemented via Anthropic (daily axis + suggest/regenerate). Configure `ANTHROPIC_API_KEY` and billing in the Anthropic console; see `docs/ai-setup.md`. Optional: Supabase Edge Function or Vercel Cron for time-based game end if not done client-side.
 

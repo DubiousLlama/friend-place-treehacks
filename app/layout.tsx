@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Outfit, DM_Sans } from "next/font/google";
 import "./globals.css";
+import { AppNav } from "@/components/AppNav";
+import { AuthMergeChecker } from "@/components/AuthMergeChecker";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -29,14 +31,11 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${dmSans.variable} antialiased flex flex-col h-dvh`}
       >
-        <header data-global-header className="shrink-0 py-3 flex items-center justify-center border-b border-black/5 bg-surface">
-          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">
-            FriendPlace
-          </h1>
-        </header>
+        <AppNav />
         <main className="flex-1 flex flex-col min-h-0 overflow-y-auto">
           {children}
         </main>
+        <AuthMergeChecker />
       </body>
     </html>
   );
