@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabase.ts";
 import { getNotificationChannel, getChannelType } from "./notification-channel.ts";
 import { getNotificationRecipient } from "./recipient.ts";
+import { getReminderCountToday, canSendReminderToday } from "./reminder-limit.ts";
 import {
   generateNotificationMessage,
   type GameContext,
@@ -45,6 +46,9 @@ export async function sendResultsRemindersForGame(game: GameRow): Promise<void> 
       .eq("kind", "results_reminder")
       .maybeSingle();
     if (existing) continue;
+
+    const reminderCountToday = await getReminderCountToday(pid);
+    if (!canSendReminderToday(reminderCountToday)) continue;
 
     const { data: player } = await supabaseAdmin
       .from("players")

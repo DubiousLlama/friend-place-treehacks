@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../_shared/supabase.ts";
 import { getNotificationChannel, getChannelType } from "../_shared/notification-channel.ts";
 import { getNotificationRecipient } from "../_shared/recipient.ts";
+import { getReminderCountToday, canSendReminderToday } from "../_shared/reminder-limit.ts";
 import {
   generateNotificationMessage,
   type GameContext,
@@ -185,6 +186,9 @@ async function maybeSendMidGameNudges(gameId: string): Promise<void> {
       .eq("kind", "mid_game_nudge")
       .maybeSingle();
     if (existing) continue;
+
+    const reminderCountToday = await getReminderCountToday(pid);
+    if (!canSendReminderToday(reminderCountToday)) continue;
 
     const message = await generateNotificationMessage("mid_game_nudge", context);
     const body = message ?? `${submitted} of ${total} have placed. Don't miss out—submit your picks!`;
