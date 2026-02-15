@@ -98,6 +98,9 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
   const sizeConfig = isMobile ? MOBILE_SIZES : DESKTOP_SIZES;
   const resultsSizes = isMobile ? MOBILE_RESULTS_SIZES : DESKTOP_RESULTS_SIZES;
   const graphRef = useRef<HTMLDivElement | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const lastTouchX = useRef<number | null>(null);
+  const SWIPE_THRESHOLD = 150;
 
   // ---- Data fetching ----
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
@@ -142,6 +145,12 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     [gamePlayers, allGuesses, loadingGuesses],
   );
 
+  // Any guess on the board earned the best friend bonus (for legend visibility)
+  const hasAnyBestFriendBonus = useMemo(
+    () => guessDetails.some((d) => d.bestFriendBonus > 0),
+    [guessDetails],
+  );
+
   // Guess lookup by ID
   const guessLookup = useMemo(() => {
     const m = new Map<string, Guess>();
@@ -172,8 +181,8 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     return claimedPlayers
       .map((gp) => {
         const b = breakdowns.get(gp.id);
-        // Prefer server-side score, fallback to client-computed
-        const totalScore = gp.score ?? b?.totalScore ?? 0;
+        // Single source of truth: scores from lib/scoring via computeScoreBreakdowns
+        const totalScore = b?.totalScore ?? 0;
         return {
           gamePlayerId: gp.id,
           displayName: gp.display_name,
@@ -236,9 +245,58 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     return result;
   }, [graphDims, resultsSizes]);
 
+  // Carousel order (claimed_at, matches color assignment) — used for mobile dot row
+  const carouselOrderedPlayers = useMemo(
+    () => [...claimedPlayers].sort(
+      (a, b) => (a.claimed_at ?? "").localeCompare(b.claimed_at ?? ""),
+    ),
+    [claimedPlayers],
+  );
+
   // Interaction state
   const [activeNetwork, setActiveNetwork] = useState<string | null>(null);
   const [activeBreakdown, setActiveBreakdown] = useState<string | null>(null);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [carouselDragProgress, setCarouselDragProgress] = useState(0);
+  const [hoveredGuessTargetId, setHoveredGuessTargetId] = useState<string | null>(null);
+
+  // Mobile: when entering explore phase, start with current player's network highlighted (deferred to avoid sync setState in effect)
+  useEffect(() => {
+    if (!isMobile || phase !== "explore" || carouselOrderedPlayers.length === 0) return;
+    const idx = carouselOrderedPlayers.findIndex(
+      (gp) => gp.player_id === currentPlayerId,
+    );
+    if (idx >= 0) queueMicrotask(() => setCarouselIndex(idx));
+  }, [isMobile, phase, carouselOrderedPlayers, currentPlayerId]);
+
+  // Blended carousel index during drag (mobile); used to interpolate between two network views
+  const totalSlots = carouselOrderedPlayers.length + 1;
+  const effectiveCarouselIndexFloat = Math.max(
+    0,
+    Math.min(totalSlots, carouselIndex + carouselDragProgress),
+  );
+  const carouselBlend = useMemo(() => {
+    if (carouselDragProgress === 0) return null;
+    const fromIndex = Math.floor(effectiveCarouselIndexFloat);
+    const toIndex = Math.min(fromIndex + 1, totalSlots);
+    const blendT = effectiveCarouselIndexFloat - fromIndex;
+    return {
+      fromId: fromIndex < carouselOrderedPlayers.length ? carouselOrderedPlayers[fromIndex].id : null,
+      toId: toIndex < carouselOrderedPlayers.length ? carouselOrderedPlayers[toIndex].id : null,
+      fromOpacity: 1 - blendT,
+      toOpacity: blendT,
+    };
+  }, [carouselDragProgress, effectiveCarouselIndexFloat, carouselOrderedPlayers, totalSlots]);
+
+  // On mobile in explore phase, highlighted network is driven by carousel; otherwise use activeNetwork (desktop hover/tap)
+  const effectiveActiveNetwork =
+    isMobile && phase === "explore"
+      ? carouselBlend
+        ? (carouselBlend.fromOpacity >= 0.5 ? carouselBlend.fromId : carouselBlend.toId)
+        : carouselIndex < carouselOrderedPlayers.length
+          ? carouselOrderedPlayers[carouselIndex].id
+          : null
+      : activeNetwork;
 
   // Build obstacles from all self-placement dots so labels avoid them.
   const dotObstacles = useMemo<Obstacle[]>(() => {
@@ -256,11 +314,11 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     }
 
     // Also add visible guess dots as obstacles
-    if (activeNetwork || activeBreakdown) {
+    if (effectiveActiveNetwork || activeBreakdown) {
       for (const detail of guessDetails) {
         const isVisible =
           (activeBreakdown && detail.guesserId === activeBreakdown) ||
-          (activeNetwork && detail.targetId === activeNetwork);
+          (effectiveActiveNetwork && detail.targetId === effectiveActiveNetwork);
         if (!isVisible) continue;
         const guess = guessLookup.get(detail.guessId);
         if (guess) obs.push({ position: { x: guess.guess_x, y: guess.guess_y }, radius: guessR });
@@ -268,7 +326,7 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     }
 
     return obs;
-  }, [graphDims, resultsSizes, gamePlayers, selfPlacements, guessDetails, guessLookup, activeNetwork, activeBreakdown]);
+  }, [graphDims, resultsSizes, gamePlayers, selfPlacements, guessDetails, guessLookup, effectiveActiveNetwork, activeBreakdown]);
 
   // Compute optimal anchor directions for ALL visible labels (self + guess).
   // Recomputes whenever interaction state changes so new labels don't collide.
@@ -290,22 +348,14 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
       });
     }
 
-    // Guess-dot labels (visible when a network or breakdown is active)
-    if (activeNetwork || activeBreakdown) {
-      const gl = activeBreakdown ? normLabel.points : normLabel.guesser;
+    // Guess-dot labels (network mode only — in breakdown mode points are in the scoreboard list)
+    if (effectiveActiveNetwork && !activeBreakdown) {
+      const gl = normLabel.guesser;
       for (const detail of guessDetails) {
-        const isVisible =
-          (activeBreakdown && detail.guesserId === activeBreakdown) ||
-          (activeNetwork && detail.targetId === activeNetwork);
-        if (!isVisible) continue;
-
+        if (detail.targetId !== effectiveActiveNetwork) continue;
         const guess = guessLookup.get(detail.guessId);
         if (!guess) continue;
-
-        const labelText = activeBreakdown
-          ? `+${Math.round(detail.guesserPoints)}`
-          : (gpLookup.get(detail.guesserId)?.display_name ?? "");
-
+        const labelText = gpLookup.get(detail.guesserId)?.display_name ?? "";
         inputs.push({
           id: `guess-${detail.guessId}`,
           position: { x: guess.guess_x, y: guess.guess_y },
@@ -316,25 +366,8 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
       }
     }
 
-    // Bonus label on the breakdown player's self-placement dot
-    if (activeBreakdown) {
-      const bl = normLabel.bonus;
-      const bd = breakdowns.get(activeBreakdown);
-      const bdPos = selfPlacements.get(activeBreakdown);
-      if (bd && bdPos && bd.bonusPoints > 0) {
-        const bonusText = `Bonus: +${Math.round(bd.bonusPoints)}`;
-        inputs.push({
-          id: `bonus-${activeBreakdown}`,
-          position: bdPos,
-          labelWidth: bonusText.length * bl.charWidth + bl.padWidth,
-          labelH: bl.labelH,
-          offset: bl.offset,
-        });
-      }
-    }
-
     return computeLabelAnchors(inputs, pl, dotObstacles);
-  }, [gamePlayers, selfPlacements, normLabel, guessDetails, guessLookup, gpLookup, activeNetwork, activeBreakdown, breakdowns, dotObstacles]);
+  }, [gamePlayers, selfPlacements, normLabel, guessDetails, guessLookup, gpLookup, effectiveActiveNetwork, activeBreakdown, dotObstacles]);
 
   // Phase 1 → 2: after graph is visible, wait then start score count-up
   useEffect(() => {
@@ -397,6 +430,7 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
       if (!scoreAnimDone) return;
       setActiveBreakdown((prev) => (prev === gamePlayerId ? null : gamePlayerId));
       setActiveNetwork(null);
+      setHoveredGuessTargetId(null);
     },
     [scoreAnimDone],
   );
@@ -412,58 +446,148 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
   const handleNetworkTap = useCallback(
     (targetId: string) => {
       if (activeBreakdown) return;
-      setActiveNetwork((prev) => (prev === targetId ? null : targetId));
+      if (isMobile) {
+        const idx = carouselOrderedPlayers.findIndex((gp) => gp.id === targetId);
+        if (idx >= 0) {
+          const isCurrentlySelected = effectiveActiveNetwork === targetId;
+          setCarouselIndex(isCurrentlySelected ? carouselOrderedPlayers.length : idx);
+        }
+        // else: tap on unknown target
+      } else {
+        setActiveNetwork((prev) => (prev === targetId ? null : targetId));
+      }
     },
-    [activeBreakdown],
+    [activeBreakdown, isMobile, effectiveActiveNetwork, carouselOrderedPlayers],
   );
 
   const handleGraphBackgroundClick = useCallback(() => {
     setActiveBreakdown(null);
     setActiveNetwork(null);
+    setHoveredGuessTargetId(null);
   }, []);
+
+  // Mobile: swipe left/right to cycle network carousel; drag progress gives live feedback
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const x = e.nativeEvent.touches[0].clientX;
+    touchStartX.current = x;
+    lastTouchX.current = null;
+    setCarouselDragProgress(0);
+    setActiveBreakdown(null);
+  }, []);
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const start = touchStartX.current;
+      if (start == null) return;
+      const current = e.nativeEvent.touches[0].clientX;
+      lastTouchX.current = current;
+      const delta = start - current;
+      const progress = Math.max(-1, Math.min(1, delta / SWIPE_THRESHOLD));
+      setCarouselDragProgress(progress);
+    },
+    [],
+  );
+
+  const COMMIT_THRESHOLD = 0.4;
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const start = touchStartX.current;
+      touchStartX.current = null;
+      const endFromEvent = e.nativeEvent.changedTouches?.[0]?.clientX;
+      const end = lastTouchX.current ?? endFromEvent ?? start;
+      lastTouchX.current = null;
+      if (start == null) return;
+      const delta = end - start;
+      const progress = Math.max(-1, Math.min(1, delta / SWIPE_THRESHOLD));
+      const totalSlotsVal = carouselOrderedPlayers.length + 1;
+      const step = progress <= -COMMIT_THRESHOLD ? 1 : progress >= COMMIT_THRESHOLD ? -1 : 0;
+      const newIndex = Math.max(
+        0,
+        Math.min(totalSlotsVal - 1, carouselIndex + step),
+      );
+      setCarouselIndex(newIndex);
+      setCarouselDragProgress(0);
+    },
+    [carouselIndex, carouselOrderedPlayers.length],
+  );
 
   // ---- Opacity helpers ----
 
   const getSelfDotOpacity = useCallback(
     (playerId: string) => {
       if (activeBreakdown) {
-        if (playerId === activeBreakdown) return 1;
+        if (hoveredGuessTargetId) {
+          if (playerId === hoveredGuessTargetId) return 1;
+          if (playerId === activeBreakdown) return 0.35;
+          if (breakdownTargets(activeBreakdown).has(playerId)) return 0.5;
+          return 0.2;
+        }
+        if (playerId === activeBreakdown) return 0.35;
         if (breakdownTargets(activeBreakdown).has(playerId)) return 0.8;
         return 0.2;
       }
-      if (activeNetwork) {
-        return playerId === activeNetwork ? 1 : 0.25;
+      if (carouselBlend) {
+        if (playerId === carouselBlend.fromId) return 0.25 + 0.75 * carouselBlend.fromOpacity;
+        if (playerId === carouselBlend.toId) return 0.25 + 0.75 * carouselBlend.toOpacity;
+        return 0.25;
+      }
+      if (effectiveActiveNetwork) {
+        return playerId === effectiveActiveNetwork ? 1 : 0.25;
       }
       return 1;
     },
-    [activeBreakdown, activeNetwork, breakdownTargets],
+    [activeBreakdown, effectiveActiveNetwork, breakdownTargets, hoveredGuessTargetId, carouselBlend],
   );
 
   const getGuessDotOpacity = useCallback(
     (detail: GuessScoreDetail) => {
       if (activeBreakdown) {
+        if (hoveredGuessTargetId) {
+          if (detail.guesserId === activeBreakdown && detail.targetId === hoveredGuessTargetId) return 0.95;
+          if (detail.guesserId === activeBreakdown) return 0.4;
+          return 0.12;
+        }
         return detail.guesserId === activeBreakdown ? 0.9 : 0.12;
       }
-      if (activeNetwork) {
-        return detail.targetId === activeNetwork ? 0.85 : 0.12;
+      if (carouselBlend) {
+        if (detail.targetId === carouselBlend.fromId) return 0.25 + 0.75 * carouselBlend.fromOpacity;
+        if (detail.targetId === carouselBlend.toId) return 0.25 + 0.75 * carouselBlend.toOpacity;
+        return 0.12;
+      }
+      if (effectiveActiveNetwork) {
+        return detail.targetId === effectiveActiveNetwork ? 0.85 : 0.12;
       }
       return 0.7;
     },
-    [activeBreakdown, activeNetwork],
+    [activeBreakdown, effectiveActiveNetwork, hoveredGuessTargetId, carouselBlend],
   );
 
   const getLineOpacity = useCallback(
     (detail: GuessScoreDetail) => {
       const baseOpacity = 0.15 + detail.accuracy * 0.35;
       if (activeBreakdown) {
+        if (hoveredGuessTargetId) {
+          if (detail.guesserId === activeBreakdown && detail.targetId === hoveredGuessTargetId) {
+            return Math.min(0.85, baseOpacity * 2.5);
+          }
+          if (detail.guesserId === activeBreakdown) return 0.15;
+          return 0.04;
+        }
         return detail.guesserId === activeBreakdown ? Math.min(0.7, baseOpacity * 2.5) : 0.04;
       }
-      if (activeNetwork) {
-        return detail.targetId === activeNetwork ? Math.min(0.65, baseOpacity * 2) : 0.04;
+      if (carouselBlend) {
+        const blendOpacity = (o: number) => Math.min(0.65, baseOpacity * 2) * (0.25 + 0.75 * o);
+        if (detail.targetId === carouselBlend.fromId) return blendOpacity(carouselBlend.fromOpacity);
+        if (detail.targetId === carouselBlend.toId) return blendOpacity(carouselBlend.toOpacity);
+        return 0.04;
+      }
+      if (effectiveActiveNetwork) {
+        return detail.targetId === effectiveActiveNetwork ? Math.min(0.65, baseOpacity * 2) : 0.04;
       }
       return baseOpacity;
     },
-    [activeBreakdown, activeNetwork],
+    [activeBreakdown, effectiveActiveNetwork, hoveredGuessTargetId, carouselBlend],
   );
 
   // Should a label be shown on a guess dot?
@@ -485,7 +609,7 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
   const scoreboard = (
     <div className="flex flex-col gap-1.5">
       <h2 className="font-display font-bold text-lg text-foreground mb-1">
-        Results
+        {activeBreakdown ? "Score breakdown" : "Results"}
       </h2>
       {sortedPlayers.map((player, i) => {
         const color = colorMap.get(player.gamePlayerId);
@@ -493,80 +617,162 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
         const isWinner = i === 0 && scoreAnimDone;
         const isActive = activeBreakdown === player.gamePlayerId;
         const isMe = gpLookup.get(player.gamePlayerId)?.player_id === currentPlayerId;
+        const playerBreakdown = isActive ? breakdowns.get(player.gamePlayerId) : null;
+        const totalBestFriendBonus =
+          breakdowns.get(player.gamePlayerId)?.guessDetails.reduce((s, d) => s + d.bestFriendBonus, 0) ?? 0;
 
         return (
-          <motion.div
-            key={player.gamePlayerId}
-            initial={{ opacity: 0, x: -12 }}
-            animate={{
-              opacity: 1,
-              x: 0,
-              scale: isActive ? 1.02 : 1,
-            }}
-            transition={{ delay: i * 0.06, duration: 0.3 }}
-            onClick={() => handleScoreTap(player.gamePlayerId)}
-            className={`
-              flex items-center gap-3 rounded-xl cursor-pointer
-              transition-all duration-300 select-none
-              ${isActive
-                ? "bg-white shadow-lg ring-2 px-3 py-2.5"
-                : "hover:bg-white/60 px-3 py-2.5"
-              }
-            `}
-            style={isActive ? {
-              borderLeft: `3px solid ${color?.color}`,
-              // Tailwind ring-2 uses box-shadow; override with player color
-              boxShadow: `0 0 0 2px ${color?.color}40, 0 4px 12px rgba(0,0,0,0.08)`,
-            } : undefined}
-          >
-            {/* Rank (replaced by winner badge for 1st place) */}
-            <span className="w-5 h-5 shrink-0 flex items-center justify-center">
-              {isWinner ? (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={springTransition}
-                  className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center"
+          <div key={player.gamePlayerId} className="flex flex-col gap-0">
+            <motion.div
+              initial={{ opacity: 0, x: -12 }}
+              animate={{
+                opacity: 1,
+                x: 0,
+                scale: isActive ? 1.02 : 1,
+              }}
+              transition={{ delay: i * 0.06, duration: 0.3 }}
+              onClick={() => handleScoreTap(player.gamePlayerId)}
+              className={`
+                flex items-center gap-3 rounded-xl cursor-pointer
+                transition-all duration-300 select-none
+                ${isActive
+                  ? "bg-white shadow-lg ring-2 px-3 py-2.5"
+                  : "hover:bg-white/60 px-3 py-2.5"
+                }
+              `}
+              style={isActive ? {
+                borderLeft: `3px solid ${color?.color}`,
+                boxShadow: `0 0 0 2px ${color?.color}40, 0 4px 12px rgba(0,0,0,0.08)`,
+              } : undefined}
+            >
+              {/* Rank (replaced by winner badge for 1st place) */}
+              <span className="w-5 h-5 shrink-0 flex items-center justify-center">
+                {isWinner ? (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={springTransition}
+                    className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center"
+                  >
+                    <span className="text-[10px] font-bold text-white">1</span>
+                  </motion.div>
+                ) : (
+                  <span className="text-xs font-body text-secondary">
+                    {i + 1}
+                  </span>
+                )}
+              </span>
+
+              {/* Color dot */}
+              <div
+                className="w-3 h-3 rounded-full shrink-0"
+                style={{ backgroundColor: color?.color }}
+              />
+
+              {/* Name */}
+              <span className="flex-1 text-sm font-body font-medium text-foreground truncate">
+                {player.displayName}
+                {isMe && (
+                  <span className="text-xs text-secondary ml-1">(you)</span>
+                )}
+              </span>
+
+              {/* Score */}
+              <span className="text-sm font-display font-bold tabular-nums shrink-0 text-foreground">
+                {displayed}
+              </span>
+
+              {/* Active indicator */}
+              {isActive && (
+                <motion.span
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-xs text-secondary shrink-0"
                 >
-                  <span className="text-[10px] font-bold text-white">1</span>
+                  ▾
+                </motion.span>
+              )}
+            </motion.div>
+
+            {/* Score breakdown — directly below this player when selected */}
+            <AnimatePresence>
+              {playerBreakdown && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden flex flex-col gap-1 pl-3 mt-4"
+                >
+                  {playerBreakdown.guessDetails.map((detail) => {
+                    const targetName = gpLookup.get(detail.targetId)?.display_name ?? "";
+                    const targetColor = colorMap.get(detail.targetId);
+                    const distanceStr = detail.distance.toFixed(2);
+                    return (
+                      <React.Fragment key={detail.guessId}>
+                        <div
+                          className="flex items-start gap-2 text-xs font-body text-secondary leading-tight"
+                          onMouseEnter={() => !isMobile && setHoveredGuessTargetId(detail.targetId)}
+                          onMouseLeave={() => !isMobile && setHoveredGuessTargetId(null)}
+                        >
+                          <span
+                            className="shrink-0 rounded-full mt-0.5"
+                            style={{
+                              width: 8,
+                              height: 8,
+                              backgroundColor: targetColor?.color ?? "#888",
+                            }}
+                          />
+                          <span className="flex-1 line-clamp-2 leading-tight min-w-0">
+                            {distanceStr} units away from {targetName}
+                          </span>
+                          <span className="font-medium text-foreground tabular-nums shrink-0 pt-px">
+                            +{Math.round(detail.guesserPoints)}
+                          </span>
+                        </div>
+                        {detail.bestFriendBonus > 0 && (
+                          <div className="flex items-start gap-2 text-xs font-body text-secondary leading-tight">
+                            <span className="w-2 shrink-0" aria-hidden />
+                            <span className="flex-1 line-clamp-2 leading-tight min-w-0">
+                              Best friend bonus +{detail.bestFriendBonus}
+                            </span>
+                          </div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                  {playerBreakdown.bonusDetails.length > 0 && (() => {
+                    const breakdownColor = colorMap.get(playerBreakdown.gamePlayerId);
+                    const avgDist = (
+                      playerBreakdown.bonusDetails.reduce((s, d) => s + d.distance, 0) /
+                      playerBreakdown.bonusDetails.length
+                    ).toFixed(2);
+                    return (
+                      <div
+                        className="flex items-start gap-2 text-xs font-body text-secondary leading-tight"
+                        onMouseEnter={() => !isMobile && setHoveredGuessTargetId(null)}
+                        onMouseLeave={() => !isMobile && setHoveredGuessTargetId(null)}
+                      >
+                        <span
+                          className="shrink-0 rounded-full mt-0.5"
+                          style={{
+                            width: 8,
+                            height: 8,
+                            backgroundColor: breakdownColor?.color ?? "#888",
+                          }}
+                        />
+                        <span className="flex-1 line-clamp-2 leading-tight min-w-0">
+                          {avgDist} average friend distance
+                        </span>
+                        <span className="font-medium text-foreground tabular-nums shrink-0 pt-px">
+                          +{Math.round(playerBreakdown.bonusPoints)}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </motion.div>
-              ) : (
-                <span className="text-xs font-body text-secondary">
-                  {i + 1}
-                </span>
               )}
-            </span>
-
-            {/* Color dot */}
-            <div
-              className="w-3 h-3 rounded-full shrink-0"
-              style={{ backgroundColor: color?.color }}
-            />
-
-            {/* Name */}
-            <span className="flex-1 text-sm font-body font-medium text-foreground truncate">
-              {player.displayName}
-              {isMe && (
-                <span className="text-xs text-secondary ml-1">(you)</span>
-              )}
-            </span>
-
-            {/* Score */}
-            <span className="text-sm font-display font-bold tabular-nums shrink-0 text-foreground">
-              {displayed}
-            </span>
-
-            {/* Active indicator */}
-            {isActive && (
-              <motion.span
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-xs text-secondary shrink-0"
-              >
-                ▾
-              </motion.span>
-            )}
-          </motion.div>
+            </AnimatePresence>
+          </div>
         );
       })}
 
@@ -598,37 +804,27 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
           />
           <span className="text-xs font-body text-secondary">Guess by another player</span>
         </div>
+        {hasAnyBestFriendBonus && (
+          <div className="flex items-center gap-2">
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: resultsSizes.guessDotSize,
+                height: resultsSizes.guessDotSize,
+                marginLeft: (resultsSizes.selfDotSize * 0.7 - resultsSizes.guessDotSize) / 2,
+                marginRight: (resultsSizes.selfDotSize * 0.7 - resultsSizes.guessDotSize) / 2,
+                fontSize: resultsSizes.guessDotSize * 2,
+                lineHeight: 1,
+                color: "#888",
+              }}
+            >
+              ★
+            </span>
+            <span className="text-xs font-body text-secondary">Spectacular guess by another player</span>
+          </div>
+        )}
       </div>
 
-      {/* Breakdown summary card */}
-      <AnimatePresence>
-        {breakdownPlayer && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-2 px-3 py-2.5 rounded-xl bg-white/80 border border-black/5 text-xs font-body text-secondary">
-              <span className="font-medium text-foreground">
-                {breakdownPlayer.displayName}
-              </span>{" "}
-              guessed {breakdownPlayer.guessDetails.length} friend
-              {breakdownPlayer.guessDetails.length !== 1 ? "s" : ""} for{" "}
-              <span className="font-medium text-foreground">
-                {Math.round(breakdownPlayer.guessPoints)} pts
-              </span>
-              {breakdownPlayer.bonusPoints > 0 && (
-                <>
-                  {" "}+ <span className="font-medium text-foreground">
-                    {Math.round(breakdownPlayer.bonusPoints)} bonus
-                  </span>
-                </>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 
@@ -647,8 +843,11 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
           const targetSelf = selfPlacements.get(detail.targetId);
           if (!guess || !targetSelf) return null;
 
-          const targetColor = colorMap.get(detail.targetId)?.color ?? "#999";
           const lineWidth = 1 + detail.accuracy * 2;
+          const strokeColor =
+            activeBreakdown && detail.guesserId === activeBreakdown
+              ? (colorMap.get(activeBreakdown)?.color ?? "#999")
+              : (colorMap.get(detail.targetId)?.color ?? "#999");
 
           return (
             <line
@@ -657,7 +856,7 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
               y1={`${(1 - guess.guess_y) * 100}%`}
               x2={`${targetSelf.x * 100}%`}
               y2={`${(1 - targetSelf.y) * 100}%`}
-              stroke={targetColor}
+              stroke={strokeColor}
               strokeWidth={lineWidth}
               opacity={getLineOpacity(detail)}
               className="transition-opacity duration-300"
@@ -671,7 +870,10 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
         const guess = guessLookup.get(detail.guessId);
         if (!guess) return null;
 
-        const targetColor = colorMap.get(detail.targetId);
+        const guessDotColor =
+          activeBreakdown && detail.guesserId === activeBreakdown
+            ? colorMap.get(activeBreakdown)
+            : colorMap.get(detail.targetId);
         const pos = { x: guess.guess_x, y: guess.guess_y };
         const css = normalizedToPercent(pos);
 
@@ -699,14 +901,28 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
               if (isMobile) handleNetworkTap(detail.targetId);
             }}
           >
-            <div
-              className="rounded-full"
-              style={{
-                width: resultsSizes.guessDotSize,
-                height: resultsSizes.guessDotSize,
-                backgroundColor: targetColor?.color,
-              }}
-            />
+            {detail.bestFriendBonus > 0 ? (
+              <span
+                className="select-none"
+                style={{
+                  fontSize: resultsSizes.guessDotSize * 2.5,
+                  lineHeight: 1,
+                  color: guessDotColor?.color ?? "#888",
+                }}
+                aria-label="Spectacular guess"
+              >
+                ★
+              </span>
+            ) : (
+              <div
+                className="rounded-full"
+                style={{
+                  width: resultsSizes.guessDotSize,
+                  height: resultsSizes.guessDotSize,
+                  backgroundColor: guessDotColor?.color,
+                }}
+              />
+            )}
           </div>
         );
       })}
@@ -718,13 +934,13 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
 
         const targetColor = colorMap.get(detail.targetId);
         const guesserName = gpLookup.get(detail.guesserId)?.display_name ?? "";
+        // In score breakdown mode, point labels are in the scoreboard list — no labels on graph
         const showLabel =
-          (activeBreakdown && detail.guesserId === activeBreakdown) ||
-          (activeNetwork && detail.targetId === activeNetwork);
+          !activeBreakdown && effectiveActiveNetwork && detail.targetId === effectiveActiveNetwork;
 
         const css = normalizedToPercent({ x: guess.guess_x, y: guess.guess_y });
         const guessAnchor = allLabelAnchors.get(`guess-${detail.guessId}`) ?? "ne";
-        const ls = activeBreakdown ? resultsSizes.pointsLabel : resultsSizes.guesserLabel;
+        const ls = resultsSizes.guesserLabel;
 
         return (
           <div
@@ -755,13 +971,11 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
                     paddingRight: ls.padX,
                     paddingTop: ls.padY,
                     paddingBottom: ls.padY,
-                    color: activeBreakdown ? "#171717" : targetColor?.color,
+                    color: targetColor?.color,
                     ...resultLabelStyle(guessAnchor, resultsSizes.guessHitSize, resultsSizes.guessLabelOffset),
                   }}
                 >
-                  {activeBreakdown
-                    ? `+${Math.round(detail.guesserPoints)}`
-                    : guesserName}
+                  {guesserName}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -776,7 +990,7 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
 
         const color = colorMap.get(player.gamePlayerId);
         const css = normalizedToPercent(selfPos);
-        const isNetworkActive = activeNetwork === player.gamePlayerId;
+        const isNetworkActive = effectiveActiveNetwork === player.gamePlayerId;
         const isBreakdownActive = activeBreakdown === player.gamePlayerId;
 
         return (
@@ -826,8 +1040,8 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
 
         const color = colorMap.get(player.gamePlayerId);
         const css = normalizedToPercent(selfPos);
-        const isBreakdownActive = activeBreakdown === player.gamePlayerId;
-        const showBonusLabel = isBreakdownActive && breakdownPlayer;
+        // Bonus is shown in scoreboard list in breakdown mode, not on graph
+        const showBonusLabel = false;
 
         return (
           <div
@@ -904,9 +1118,14 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     return (
       <div className="flex flex-col min-h-0 flex-1 bg-surface">
         {/* Graph — height matches the roughly-square graph (width-constrained).
-            100vw approximates the grid height (width minus label chrome) and
-            keeps the graph snug at the top with no centering gap.            */}
-        <div className="shrink-0 px-2 pt-1" style={{ height: "min(100vw, 60vh)" }}>
+            Swipe left/right to cycle network. */}
+        <div
+          className="shrink-0 px-2 pt-1"
+          style={{ height: "min(100vw, 60vh)" }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           <GameGraph
             axisXLow={game.axis_x_label_low}
             axisXHigh={game.axis_x_label_high}
@@ -918,6 +1137,53 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
             {graphContent}
           </GameGraph>
         </div>
+
+        {/* Dot indicator row — swipe affordance (explore phase only) */}
+        {phase === "explore" && (
+          <div className="shrink-0 flex items-center justify-center gap-2 py-2">
+            {carouselOrderedPlayers.map((gp, i) => {
+              const color = colorMap.get(gp.id);
+              const selected = carouselIndex === i;
+              return (
+                <button
+                  key={gp.id}
+                  type="button"
+                  aria-label={`Show ${gp.display_name}'s network`}
+                  className="rounded-full transition-opacity duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface"
+                  style={{
+                    width: 10,
+                    height: 10,
+                    backgroundColor: color?.color ?? "#888",
+                    opacity: selected ? 1 : 0.35,
+                    boxShadow: selected ? `0 0 0 2px ${color?.medium ?? "transparent"}` : undefined,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveBreakdown(null);
+                    setCarouselIndex(i);
+                  }}
+                />
+              );
+            })}
+            <button
+              type="button"
+              aria-label="Show all networks"
+              className="rounded-full transition-opacity duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface"
+              style={{
+                width: 10,
+                height: 10,
+                backgroundColor: "#888",
+                opacity: carouselIndex === carouselOrderedPlayers.length ? 1 : 0.35,
+                boxShadow: carouselIndex === carouselOrderedPlayers.length ? "0 0 0 2px rgba(0,0,0,0.2)" : undefined,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveBreakdown(null);
+                setCarouselIndex(carouselOrderedPlayers.length);
+              }}
+            />
+          </div>
+        )}
 
         {/* Scoreboard — directly below graph, scrolls independently */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 pb-4">

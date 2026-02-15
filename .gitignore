@@ -41,3 +41,4 @@ yarn-error.log*
 next-env.d.ts
 .cursor/plans/TR96-04.pdf
 .cursor/plans/carto-final.pdf
+.cursor/debug.log

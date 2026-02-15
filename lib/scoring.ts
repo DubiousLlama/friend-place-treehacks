@@ -17,8 +17,21 @@ type Guess = Database["public"]["Tables"]["guesses"]["Row"];
 /** Maximum points a guesser can earn per correct guess (perfect placement). */
 export const MAX_GUESS_POINTS = 100;
 
-/** Fraction of guesser points awarded to the target as a bonus. */
-export const TARGET_BONUS_FRACTION = 0.2;
+/** Piecewise scoring: red segment y = -2x + 1 and green segment y = -0.2x + 0.2. */
+/** Distance at which we switch from red to green (intersection: 4/9). */
+export const PIECEWISE_KINK = 4 / 9;
+/** Bonus points when guess is within this distance of target. */
+export const BEST_FRIEND_BONUS = 50;
+/** Distance threshold for best friend bonus. */
+export const BEST_FRIEND_RADIUS = 0.12;
+
+/**
+ * Fraction of guesser points the target receives: 1 / (numPlayers + 1).
+ * Exported for client-side score breakdown (scoring-client.ts).
+ */
+export function getTargetBonusFraction(numPlayers: number): number {
+  return 1 / (numPlayers);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,10 +50,25 @@ export function euclideanDistance(
 }
 
 /**
- * Accuracy score for a single guess (0-1).
- * accuracy = max(0, 1 - distance)
- * A perfect guess (distance = 0) returns 1.
- * A guess with distance >= 1 returns 0.
+ * Piecewise linear accuracy (0-1):
+ * - Red segment (distance <= 4/9): y = -2x + 1
+ * - Green segment (4/9 <= distance <= 1): y = -0.2x + 0.2
+ * - Distance > 1: 0
+ */
+export function linearAccuracyFromDistance(dist: number): number {
+  if (dist > 1) return 0;
+  if (dist <= PIECEWISE_KINK) return Math.max(0, -2 * dist + 1);
+  return Math.max(0, -0.2 * dist + 0.2);
+}
+
+/** Best friend bonus (BEST_FRIEND_BONUS) when distance <= BEST_FRIEND_RADIUS, else 0. */
+export function getBestFriendBonus(dist: number): number {
+  return dist <= BEST_FRIEND_RADIUS ? BEST_FRIEND_BONUS : 0;
+}
+
+/**
+ * Accuracy score for a single guess (0-1) using the piecewise linear
+ * (red segment -2x+1, green segment -0.2x+0.2).
  */
 export function guessAccuracy(
   guessX: number,
@@ -49,7 +77,7 @@ export function guessAccuracy(
   targetSelfY: number,
 ): number {
   const dist = euclideanDistance(guessX, guessY, targetSelfX, targetSelfY);
-  return Math.max(0, 1 - dist);
+  return linearAccuracyFromDistance(dist);
 }
 
 // ---------------------------------------------------------------------------
@@ -82,11 +110,16 @@ export function computeScores(
 
   // Accumulators: gamePlayerId → running total
   const scores = new Map<string, number>();
+  let numPlayers = 0;
   for (const gp of gamePlayers) {
     if (gp.player_id != null) {
       scores.set(gp.id, 0);
+      numPlayers++;
     }
   }
+
+  /** Fraction of guesser points the target receives: 1 / (numPlayers + 1). */
+  const targetFraction = 1 / (numPlayers + 1);
 
   for (const guess of guesses) {
     const targetSelf = selfPlacements.get(guess.target_game_player_id);
@@ -95,15 +128,15 @@ export function computeScores(
       continue;
     }
 
-    const accuracy = guessAccuracy(
+    const dist = euclideanDistance(
       guess.guess_x,
       guess.guess_y,
       targetSelf.x,
       targetSelf.y,
     );
-
-    const guesserPoints = accuracy * MAX_GUESS_POINTS;
-    const targetBonus = guesserPoints * TARGET_BONUS_FRACTION;
+    const accuracy = linearAccuracyFromDistance(dist);
+    const guesserPoints = accuracy * MAX_GUESS_POINTS + getBestFriendBonus(dist);
+    const targetBonus = guesserPoints * targetFraction;
 
     // Add guesser points
     const currentGuesser = scores.get(guess.guesser_game_player_id) ?? 0;

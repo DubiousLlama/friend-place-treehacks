@@ -13,7 +13,8 @@ import {
   guessAccuracy,
   euclideanDistance,
   MAX_GUESS_POINTS,
-  TARGET_BONUS_FRACTION,
+  getTargetBonusFraction,
+  getBestFriendBonus,
 } from "@/lib/scoring";
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,8 @@ export interface GuessScoreDetail {
   targetBonus: number;
   accuracy: number;
   distance: number;
+  /** Best friend bonus (e.g. 50) when within BEST_FRIEND_RADIUS, else 0. */
+  bestFriendBonus: number;
 }
 
 /** Full score breakdown for a single player. */
@@ -78,6 +81,7 @@ export function computeScoreBreakdowns(
 
   // Initialize breakdowns for all claimed players
   const breakdowns = new Map<string, PlayerScoreBreakdown>();
+  let numPlayers = 0;
   for (const gp of gamePlayers) {
     if (gp.player_id != null) {
       breakdowns.set(gp.id, {
@@ -89,8 +93,10 @@ export function computeScoreBreakdowns(
         guessDetails: [],
         bonusDetails: [],
       });
+      numPlayers++;
     }
   }
+  const targetFraction = getTargetBonusFraction(numPlayers);
 
   // Process each guess
   for (const guess of guesses) {
@@ -109,8 +115,9 @@ export function computeScoreBreakdowns(
       targetSelf.x,
       targetSelf.y,
     );
-    const guesserPoints = accuracy * MAX_GUESS_POINTS;
-    const targetBonus = guesserPoints * TARGET_BONUS_FRACTION;
+    const bestFriendBonus = getBestFriendBonus(distance);
+    const guesserPoints = accuracy * MAX_GUESS_POINTS + bestFriendBonus;
+    const targetBonus = guesserPoints * targetFraction;
 
     const detail: GuessScoreDetail = {
       guessId: guess.id,
@@ -120,6 +127,7 @@ export function computeScoreBreakdowns(
       targetBonus: Math.round(targetBonus * 10) / 10,
       accuracy,
       distance,
+      bestFriendBonus,
     };
 
     // Add to guesser's breakdown
@@ -156,11 +164,14 @@ export function computeAllGuessDetails(
   guesses: Guess[],
 ): GuessScoreDetail[] {
   const selfPlacements = new Map<string, { x: number; y: number }>();
+  let numPlayers = 0;
   for (const gp of gamePlayers) {
     if (gp.self_x != null && gp.self_y != null) {
       selfPlacements.set(gp.id, { x: gp.self_x, y: gp.self_y });
     }
+    if (gp.player_id != null) numPlayers++;
   }
+  const targetFraction = getTargetBonusFraction(numPlayers);
 
   const details: GuessScoreDetail[] = [];
 
@@ -180,8 +191,9 @@ export function computeAllGuessDetails(
       targetSelf.x,
       targetSelf.y,
     );
-    const guesserPoints = accuracy * MAX_GUESS_POINTS;
-    const targetBonus = guesserPoints * TARGET_BONUS_FRACTION;
+    const bestFriendBonus = getBestFriendBonus(distance);
+    const guesserPoints = accuracy * MAX_GUESS_POINTS + bestFriendBonus;
+    const targetBonus = guesserPoints * targetFraction;
 
     details.push({
       guessId: guess.id,
@@ -191,6 +203,7 @@ export function computeAllGuessDetails(
       targetBonus: Math.round(targetBonus * 10) / 10,
       accuracy,
       distance,
+      bestFriendBonus,
     });
   }
 
