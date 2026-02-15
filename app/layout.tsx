@@ -4,6 +4,8 @@ import "./globals.css";
 import { AppNav } from "@/components/AppNav";
 import { AuthMergeChecker } from "@/components/AuthMergeChecker";
 import { AuthModalProvider } from "@/lib/auth-modal-context";
+import { DeviceConnect } from "@/components/DeviceConnect";
+import { DisplayNameChecker } from "@/components/DisplayNameChecker";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -38,6 +40,8 @@ export default function RootLayout({
             {children}
           </main>
           <AuthMergeChecker />
+          <DeviceConnect />
+          <DisplayNameChecker />
         </AuthModalProvider>
       </body>
     </html>

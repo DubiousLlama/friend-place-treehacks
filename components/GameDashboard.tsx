@@ -28,6 +28,10 @@ interface GameDashboardProps {
   isHost: boolean;
   /** Called when the host ends the game */
   onEndGame: () => void;
+  /** Called when the host deletes the game */
+  onDeleteGame?: () => void | Promise<void>;
+  /** Pending email invites for this game (masked email only). id optional for list key. */
+  pendingInvites?: { id?: string; email: string }[];
 }
 
 export function GameDashboard({
@@ -42,6 +46,8 @@ export function GameDashboard({
   onEditName,
   isHost,
   onEndGame,
+  onDeleteGame,
+  pendingInvites = [],
 }: GameDashboardProps) {
   const [shareStatus, setShareStatus] = useState<"idle" | "shared" | "copied">("idle");
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -369,6 +375,9 @@ export function GameDashboard({
                       className={`size-2 rounded-full ${hasPlaced ? "bg-splash" : "bg-accent"}`}
                       aria-hidden
                     />
+                    {gp.player_id && (
+                      <span className="rounded bg-splash/15 px-1.5 py-0.5 text-xs font-medium text-splash" title="Linked account">Account</span>
+                    )}
                     {gp.display_name}
                     {isMe && (
                       <span className="text-xs text-secondary">
@@ -407,6 +416,16 @@ export function GameDashboard({
               claimed.
             </p>
           )}
+          {pendingInvites.length > 0 && (
+            <div className="mt-3 rounded-lg border border-dashed border-surface-muted bg-surface/50 p-3">
+              <p className="text-xs font-medium text-black mb-1.5">Invite sent to</p>
+              <ul className="space-y-1 text-xs text-secondary">
+                {pendingInvites.map((inv) => (
+                  <li key={inv.id ?? inv.email}>{inv.email}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Game deadline */}
@@ -434,7 +453,7 @@ export function GameDashboard({
 
         {/* Host: End Game button */}
         {isHost && (
-          <div className="pt-2 border-t border-[var(--border)]">
+          <div className="pt-2 border-t border-[var(--border)] space-y-2">
             <button
               type="button"
               onClick={() => {
@@ -446,6 +465,19 @@ export function GameDashboard({
             >
               End game &amp; reveal results
             </button>
+            {onDeleteGame && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Permanently delete this game? All placements and results will be lost. This can't be undone.")) {
+                    onDeleteGame();
+                  }
+                }}
+                className="w-full rounded-xl border border-secondary/30 text-secondary py-2.5 text-sm font-medium hover:bg-black/5 transition-colors"
+              >
+                Delete game
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -18,6 +18,8 @@ const MOCK_GAME: Game = {
   created_at: new Date().toISOString(),
   submissions_lock_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   end_early_when_complete: true,
+  group_id: null,
+  deleted_at: null,
 };
 
 const MOCK_GAME_LONG_LABELS: Game = {
@@ -45,6 +47,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     claimed_at: new Date().toISOString(),
     guesses_count: 0,
     results_viewed_at: null,
+    invited_email: null,
   },
   {
     id: "gp-3",
@@ -58,6 +61,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     claimed_at: null,
     guesses_count: 0,
     results_viewed_at: null,
+    invited_email: null,
   },
   {
     id: "gp-4",
@@ -71,6 +75,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     claimed_at: null,
     guesses_count: 0,
     results_viewed_at: null,
+    invited_email: null,
   },
   {
     id: "gp-5",
@@ -84,6 +89,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     claimed_at: new Date().toISOString(),
     guesses_count: 0,
     results_viewed_at: null,
+    invited_email: null,
   },
   {
     id: "gp-6",
@@ -97,6 +103,7 @@ const MOCK_OTHER_PLAYERS: GamePlayer[] = [
     claimed_at: null,
     guesses_count: 0,
     results_viewed_at: null,
+    invited_email: null,
   },
 ];
 

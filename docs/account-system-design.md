@@ -95,7 +95,7 @@ No schema change required; just UX: “Use [X] as your name in new games?” and
 
 - **New table (optional):** e.g. `saved_groups`:
   - `id`, `owner_id` (→ `players.id`), `name` (e.g. “Roommates”), `created_at`.
-- **Group members:** e.g. `saved_group_members`: `group_id`, `display_name` (and optionally `player_id` if they’re a known player).
+- **Group members:** `group_members`: `group_id`, `player_id` (nullable), `anonymous_display_name` (nullable), `is_anonymous`, `sort_order`, `joined_at`. One row per member; linked users have `player_id` set and their display name comes from `players.display_name`; anonymous members have `player_id` null and `anonymous_display_name` for the label.
 - **Flow:** After a game ends, “Save this group?” → name it → next time “Start game” can offer “Use saved group: Roommates” and pre-fill player names.
 - **Scope:** Only for users with a linked account (`auth.uid()` with email or OAuth). Anonymous users don’t see “Save group” or “Use saved group.”
 

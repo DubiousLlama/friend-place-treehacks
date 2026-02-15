@@ -62,6 +62,8 @@ export type Database = {
           created_at: string;
           submissions_lock_at: string | null;
           end_early_when_complete: boolean;
+          group_id: string | null;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -75,6 +77,8 @@ export type Database = {
           created_at?: string;
           submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
+          group_id?: string | null;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -88,6 +92,8 @@ export type Database = {
           created_at?: string;
           submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
+          group_id?: string | null;
+          deleted_at?: string | null;
         };
         Relationships: [
           {
@@ -95,6 +101,13 @@ export type Database = {
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "games_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "saved_groups";
             referencedColumns: ["id"];
           },
         ];
@@ -112,6 +125,7 @@ export type Database = {
           claimed_at: string | null;
           guesses_count: number;
           results_viewed_at: string | null;
+          invited_email: string | null;
         };
         Insert: {
           id?: string;
@@ -125,6 +139,7 @@ export type Database = {
           claimed_at?: string | null;
           guesses_count?: number;
           results_viewed_at?: string | null;
+          invited_email?: string | null;
         };
         Update: {
           id?: string;
@@ -138,6 +153,7 @@ export type Database = {
           claimed_at?: string | null;
           guesses_count?: number;
           results_viewed_at?: string | null;
+          invited_email?: string | null;
         };
         Relationships: [
           {
@@ -235,24 +251,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      device_daily_usage: {
+        Row: {
+          device_key: string;
+          date: string;
+          axes_generation_count: number;
+          invite_email_count: number;
+          user_agent: string | null;
+          ip_address: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          device_key: string;
+          date: string;
+          axes_generation_count?: number;
+          invite_email_count?: number;
+          user_agent?: string | null;
+          ip_address?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          device_key?: string;
+          date?: string;
+          axes_generation_count?: number;
+          invite_email_count?: number;
+          user_agent?: string | null;
+          ip_address?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       saved_groups: {
         Row: {
           id: string;
           owner_id: string;
-          name: string;
+          name: string | null;
           created_at: string;
+          anyone_can_add_members: boolean;
+          only_admin_can_remove: boolean;
+          daily_game_enabled: boolean;
         };
         Insert: {
           id?: string;
           owner_id: string;
-          name: string;
+          name?: string | null;
           created_at?: string;
+          anyone_can_add_members?: boolean;
+          only_admin_can_remove?: boolean;
+          daily_game_enabled?: boolean;
         };
         Update: {
           id?: string;
           owner_id?: string;
-          name?: string;
+          name?: string | null;
           created_at?: string;
+          anyone_can_add_members?: boolean;
+          only_admin_can_remove?: boolean;
+          daily_game_enabled?: boolean;
         };
         Relationships: [
           {
@@ -264,31 +322,142 @@ export type Database = {
           },
         ];
       };
-      saved_group_members: {
+      group_members: {
         Row: {
           id: string;
           group_id: string;
-          display_name: string;
+          player_id: string | null;
+          anonymous_display_name: string | null;
+          is_anonymous: boolean;
           sort_order: number;
+          joined_at: string;
         };
         Insert: {
           id?: string;
           group_id: string;
-          display_name: string;
+          player_id?: string | null;
+          anonymous_display_name?: string | null;
+          is_anonymous?: boolean;
           sort_order?: number;
+          joined_at?: string;
         };
         Update: {
           id?: string;
           group_id?: string;
-          display_name?: string;
+          player_id?: string | null;
+          anonymous_display_name?: string | null;
+          is_anonymous?: boolean;
           sort_order?: number;
+          joined_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "saved_group_members_group_id_fkey";
+            foreignKeyName: "group_members_group_id_fkey";
             columns: ["group_id"];
             isOneToOne: false;
             referencedRelation: "saved_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "group_members_player_id_fkey";
+            columns: ["player_id"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      email_invites: {
+        Row: {
+          id: string;
+          target_type: "group" | "game";
+          target_id: string;
+          email: string;
+          token: string;
+          invited_by: string;
+          created_at: string;
+          expires_at: string;
+          suggested_display_name: string | null;
+        };
+        Insert: {
+          id?: string;
+          target_type: "group" | "game";
+          target_id: string;
+          email: string;
+          token: string;
+          invited_by: string;
+          created_at?: string;
+          expires_at: string;
+          suggested_display_name?: string | null;
+        };
+        Update: {
+          id?: string;
+          target_type?: "group" | "game";
+          target_id?: string;
+          email?: string;
+          token?: string;
+          invited_by?: string;
+          created_at?: string;
+          expires_at?: string;
+          suggested_display_name?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "email_invites_invited_by_fkey";
+            columns: ["invited_by"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      user_featured_tags: {
+        Row: {
+          id: string;
+          user_id: string;
+          label: string;
+          agreement_pct: number;
+          game_id: string | null;
+          source_axis: "x" | "y" | null;
+          sort_order: number;
+          created_at: string;
+          awarded_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          label: string;
+          agreement_pct: number;
+          game_id?: string | null;
+          source_axis?: "x" | "y" | null;
+          sort_order?: number;
+          created_at?: string;
+          awarded_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          label?: string;
+          agreement_pct?: number;
+          game_id?: string | null;
+          source_axis?: "x" | "y" | null;
+          sort_order?: number;
+          created_at?: string;
+          awarded_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_featured_tags_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_featured_tags_game_id_fkey";
+            columns: ["game_id"];
+            isOneToOne: false;
+            referencedRelation: "games";
             referencedColumns: ["id"];
           },
         ];
@@ -347,6 +516,22 @@ export type Database = {
           p_force?: boolean;
         };
         Returns: Json;
+      };
+      soft_delete_game: {
+        Args: { p_game_id: string };
+        Returns: unknown;
+      };
+      check_game_invite_status: {
+        Args: { p_invite_code: string };
+        Returns: string | null;
+      };
+      increment_device_axes: {
+        Args: { p_device_key: string; p_date: string };
+        Returns: unknown;
+      };
+      increment_device_invites: {
+        Args: { p_device_key: string; p_date: string; p_count: number };
+        Returns: unknown;
       };
     };
     Enums: {

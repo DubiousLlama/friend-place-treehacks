@@ -23,8 +23,29 @@ function AccountIcon({ className }: { className?: string }) {
   );
 }
 
+function GroupsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
 export function AppNav() {
-  const { loading, isLinked } = useAuth();
+  const { user, loading, isLinked } = useAuth();
   const { openAuthModal } = useAuthModal();
 
   return (
@@ -39,6 +60,16 @@ export function AppNav() {
         </Link>
       </div>
       <div className="flex items-center gap-2 min-w-0 w-1/3 justify-end">
+        {!loading && user && isLinked && (
+          <Link
+            href="/profile/groups"
+            className="flex items-center gap-1.5 rounded p-1.5 text-secondary hover:bg-muted hover:text-foreground"
+            title="Groups"
+            aria-label="Groups"
+          >
+            <GroupsIcon className="h-4 w-4" />
+          </Link>
+        )}
         {!loading && (
           isLinked ? (
             <Link

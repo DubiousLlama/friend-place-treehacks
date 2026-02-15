@@ -20,6 +20,8 @@ interface GameInfoPanelProps {
   isHost: boolean;
   /** Called when the host ends the game */
   onEndGame: () => void;
+  /** Called when the host deletes the game */
+  onDeleteGame?: () => void | Promise<void>;
   /** "dropdown" = collapsible overlay (default, for mobile).
    *  "sidebar" = always-visible, flush with sidebar styling (for desktop). */
   variant?: "dropdown" | "sidebar";
@@ -39,6 +41,7 @@ export function GameInfoPanel({
   onEditName,
   isHost,
   onEndGame,
+  onDeleteGame,
   variant = "dropdown",
 }: GameInfoPanelProps) {
   const [open, setOpen] = useState(false);
@@ -306,6 +309,20 @@ export function GameInfoPanel({
     </button>
   ) : null;
 
+  const deleteGameButton = isHost && onDeleteGame ? (
+    <button
+      type="button"
+      onClick={() => {
+        if (window.confirm("Permanently delete this game? All placements and results will be lost. This can't be undone.")) {
+          onDeleteGame();
+        }
+      }}
+      className="w-full rounded-lg border border-secondary/30 text-secondary py-1.5 text-xs font-medium hover:bg-black/5 transition-colors"
+    >
+      Delete game
+    </button>
+  ) : null;
+
   // ---- Sidebar variant: always visible, flush styling ----
   if (variant === "sidebar") {
     return (
@@ -314,6 +331,7 @@ export function GameInfoPanel({
         {playersSection}
         {deadlineSection}
         {endGameButton}
+        {deleteGameButton}
       </div>
     );
   }
@@ -364,6 +382,7 @@ export function GameInfoPanel({
               {playersSection}
               {deadlineSection}
               {endGameButton}
+              {deleteGameButton}
             </div>
           </motion.div>
         )}

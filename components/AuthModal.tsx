@@ -9,10 +9,14 @@ interface AuthModalProps {
   onSuccess?: () => void;
   /** If set, we're prompting to "link" this anon user (e.g. from results). */
   isLinking?: boolean;
+  /** Initial tab when opening the modal. */
+  initialMode?: "signin" | "signup";
+  /** After OAuth or email confirmation, redirect here (e.g. /join?token=xxx). */
+  returnPath?: string;
 }
 
-export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+export function AuthModal({ onClose, onSuccess, isLinking, initialMode = "signin", returnPath }: AuthModalProps) {
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -31,15 +35,20 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
     }
   };
 
+  const getRedirectTo = () => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const base = `${origin}/auth/callback`;
+    if (returnPath) return `${base}?next=${encodeURIComponent(returnPath)}`;
+    return base;
+  };
+
   const handleGoogle = async () => {
     setLoading(true);
     setMessage(null);
     await setPendingMergeIfAnonymous();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`,
-      },
+      options: { redirectTo: getRedirectTo() },
     });
     if (error) {
       setMessage({ type: "error", text: error.message });
@@ -69,7 +78,7 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
       const { data: signUpData, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: password.trim(),
-        options: { emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback` },
+        options: { emailRedirectTo: getRedirectTo() },
       });
       if (error) {
         setMessage({ type: "error", text: error.message });

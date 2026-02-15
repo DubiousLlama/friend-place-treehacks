@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { NameSelector } from "@/components/NameSelector";
 import { GameDashboard } from "@/components/GameDashboard";
 import { PlacingPhase } from "@/components/PlacingPhase";
 import { GameInfoPanel } from "@/components/GameInfoPanel";
 import { ResultsView } from "@/components/ResultsView";
+import { AuthModal } from "@/components/AuthModal";
 import type { Database } from "@/lib/types/database";
 import type { Position } from "@/lib/game-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -18,16 +20,23 @@ type Game = Database["public"]["Tables"]["games"]["Row"];
 type GamePlayer = Database["public"]["Tables"]["game_players"]["Row"];
 type Guess = Database["public"]["Tables"]["guesses"]["Row"];
 
+/** Pending invite from API (masked email only) */
+type PendingInvite = { id: string; masked_email: string; invited_by: string; expires_at: string };
+
 export default function PlayPage() {
   const params = useParams();
   const inviteCode = params.inviteCode as string;
   const [game, setGame] = useState<Game | null>(null);
   const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);
+  const [pendingGameInvites, setPendingGameInvites] = useState<PendingInvite[]>([]);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Existing guesses by the current user (to know which friends are already placed)
   const [myGuesses, setMyGuesses] = useState<Guess[]>([]);
+
+  // When game is missing: "deleted" | "not_found" (null when we have a game)
+  const [notFoundReason, setNotFoundReason] = useState<"deleted" | "not_found" | null>(null);
 
   // View mode: "graph" or "dashboard"
   const [view, setView] = useState<"graph" | "dashboard">("graph");
@@ -38,8 +47,17 @@ export default function PlayPage() {
   // When true, NameSelector is shown in "switch" mode (current data preserved)
   const [switchingIdentity, setSwitchingIdentity] = useState(false);
 
+  // Claim-by-token flow (email invite: set display name then claim reserved slot)
+  const searchParams = useSearchParams();
+  const claimToken = searchParams.get("claim");
+  const [claimName, setClaimName] = useState("");
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [showClaimAuthModal, setShowClaimAuthModal] = useState(false);
+
   const isMobile = useIsMobile();
   const { isLinked } = useAuth();
+  const router = useRouter();
   const supabase = createClient();
 
   // mySlot: current user's game_players row (defined early so onboarding effect can use it)
@@ -117,9 +135,17 @@ export default function PlayPage() {
 
     if (gameErr || !rawGame) {
       setGame(null);
+      try {
+        const res = await fetch(`/api/games/by-invite/${encodeURIComponent(inviteCode)}`);
+        const body = await res.json();
+        setNotFoundReason(body.status === "deleted" ? "deleted" : "not_found");
+      } catch {
+        setNotFoundReason("not_found");
+      }
       setLoading(false);
       return;
     }
+    setNotFoundReason(null);
     const gameData = rawGame as Game;
     setGame(gameData);
 
@@ -132,6 +158,14 @@ export default function PlayPage() {
 
     const playerList = (players as GamePlayer[]) ?? [];
     setGamePlayers(playerList);
+
+    const invitesRes = await fetch(`/api/games/${gameData.id}/invites`);
+    if (invitesRes.ok) {
+      const { invites: list } = await invitesRes.json();
+      setPendingGameInvites(list ?? []);
+    } else {
+      setPendingGameInvites([]);
+    }
 
     // Find the current user's slot
     const mySlot = playerList.find((gp) => gp.player_id === user!.id);
@@ -154,6 +188,19 @@ export default function PlayPage() {
     fetchAll();
   }, [fetchAll]);
 
+  // Prefill display name from invite when claim token is present (inviter-set suggested name)
+  useEffect(() => {
+    if (!claimToken) return;
+    fetch(`/api/join?token=${encodeURIComponent(claimToken)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { suggested_display_name?: string } | null) => {
+        if (data?.suggested_display_name?.trim()) {
+          setClaimName(data.suggested_display_name.trim());
+        }
+      })
+      .catch(() => {});
+  }, [claimToken]);
+
   // Realtime: game_players changes
   useEffect(() => {
     if (!game?.id) return;
@@ -168,15 +215,20 @@ export default function PlayPage() {
           table: "game_players",
           filter: `game_id=eq.${game.id}`,
         },
-        () => {
-          supabase
-            .from("game_players")
-            .select("*")
-            .eq("game_id", game.id)
-            .order("claimed_at", { ascending: true, nullsFirst: false })
-            .then(({ data }) => {
-              if (data) setGamePlayers(data as GamePlayer[]);
-            });
+        async () => {
+          const [playersRes, invitesRes] = await Promise.all([
+            supabase
+              .from("game_players")
+              .select("*")
+              .eq("game_id", game.id)
+              .order("claimed_at", { ascending: true, nullsFirst: false }),
+            fetch(`/api/games/${game.id}/invites`),
+          ]);
+          if (playersRes.data) setGamePlayers(playersRes.data as GamePlayer[]);
+          if (invitesRes.ok) {
+            const { invites: list } = await invitesRes.json();
+            setPendingGameInvites(list ?? []);
+          }
         }
       )
       .subscribe();
@@ -279,8 +331,12 @@ export default function PlayPage() {
       }
 
       // 4. Check if game should end (early-end or time-based)
-      const { error: rpcErr } = await supabase.rpc("check_and_end_game", { p_game_id: game.id });
-      if (rpcErr) console.error("check_and_end_game RPC error:", rpcErr);
+      try {
+        const { error: rpcErr } = await supabase.rpc("check_and_end_game", { p_game_id: game.id });
+        if (rpcErr) console.error("check_and_end_game RPC error:", rpcErr);
+      } catch (checkEndErr) {
+        /* ignore */
+      }
 
       // 5. Refresh data and switch to dashboard
       await fetchAll();
@@ -306,6 +362,10 @@ export default function PlayPage() {
       if (error) {
         console.error("Failed to end game:", error);
       } else {
+        // Award consensus tags (idempotent); fire-and-forget
+        if ((data as { ended?: boolean } | null)?.ended) {
+          fetch(`/api/games/${game.id}/award-tags`, { method: "POST" }).catch(() => {});
+        }
         // Realtime subscription will update the game state automatically,
         // but also refresh to be safe
         await fetchAll();
@@ -314,6 +374,22 @@ export default function PlayPage() {
       console.error("Failed to end game:", err);
     }
   }, [game, currentPlayerId, supabase, fetchAll]);
+
+  // ---- Delete game: host only; then redirect to games list ----
+  const handleDeleteGame = useCallback(async () => {
+    if (!game || !currentPlayerId || game.created_by !== currentPlayerId) return;
+    try {
+      const res = await fetch(`/api/games/${game.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        throw new Error(error ?? "Failed to delete game");
+      }
+      router.push(currentPlayerId ? "/profile" : "/");
+    } catch (err) {
+      console.error("Delete game:", err);
+      window.alert(err instanceof Error ? err.message : "Failed to delete game");
+    }
+  }, [game, currentPlayerId, router]);
 
   // ---- Edit display name: same slot, update label only ----
 
@@ -357,20 +433,115 @@ export default function PlayPage() {
   }
 
   if (!game) {
+    const isDeleted = notFoundReason === "deleted";
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-xl font-semibold text-foreground">
-          Game not found
+          {isDeleted ? "This game has been deleted" : "Game not found"}
         </h1>
         <p className="text-secondary text-center max-w-sm">
-          This invite link may be wrong or the game may have been deleted.
+          {isDeleted
+            ? "The host has deleted this game. The invite link no longer works."
+            : "This invite link may be wrong or the game may have been deleted."}
         </p>
         <a
-          href="/"
+          href={currentPlayerId ? "/profile" : "/"}
           className="rounded-lg bg-splash text-white px-4 py-2 font-medium"
         >
-          Back home
+          {currentPlayerId ? "Back to profile" : "Back home"}
         </a>
+      </div>
+    );
+  }
+
+  // Email-invite claim flow: ?claim=TOKEN → prompt for display name, then POST /api/join
+  if (claimToken && game && currentPlayerId) {
+    const handleClaimSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const name = claimName.trim();
+      if (!name) return;
+      setClaimSubmitting(true);
+      setClaimError(null);
+      try {
+        const res = await fetch("/api/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: claimToken, displayName: name }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          setShowClaimAuthModal(true);
+          setClaimSubmitting(false);
+          return;
+        }
+        if (res.status === 404 || res.status === 410) {
+          setClaimError("Invite not found or expired.");
+          return;
+        }
+        if (!res.ok) {
+          setClaimError(data.error ?? "Something went wrong");
+          return;
+        }
+        if (data.redirect) {
+          router.replace(data.redirect);
+          return;
+        }
+        setClaimError("Invalid response");
+      } finally {
+        setClaimSubmitting(false);
+      }
+    };
+
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-xl border border-surface-muted bg-white p-6 flex flex-col gap-5">
+          <div>
+            <h1 className="text-xl font-semibold text-black mb-1">
+              You&apos;re invited to this game
+            </h1>
+            <p className="text-sm text-secondary">
+              Choose your display name to join.
+            </p>
+          </div>
+          <form onSubmit={handleClaimSubmit} className="flex flex-col gap-4">
+            <input
+              type="text"
+              value={claimName}
+              onChange={(e) => setClaimName(e.target.value)}
+              placeholder="Display name"
+              maxLength={50}
+              className="rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
+              autoFocus
+            />
+            {claimError && (
+              <p className="text-sm text-red-600">{claimError}</p>
+            )}
+            <div className="flex flex-col gap-2">
+              <button
+                type="submit"
+                disabled={claimSubmitting || !claimName.trim()}
+                className="rounded-lg bg-splash text-white px-4 py-2 font-medium disabled:opacity-50"
+              >
+                {claimSubmitting ? "Joining…" : "Continue"}
+              </button>
+              {claimError && (
+                <Link
+                  href={`/play/${inviteCode}`}
+                  className="text-center text-sm text-splash hover:underline"
+                >
+                  Open game without invite
+                </Link>
+              )}
+            </div>
+          </form>
+        </div>
+        {showClaimAuthModal && (
+          <AuthModal
+            returnPath={`/play/${inviteCode}?claim=${encodeURIComponent(claimToken)}`}
+            onClose={() => setShowClaimAuthModal(false)}
+            onSuccess={() => setShowClaimAuthModal(false)}
+          />
+        )}
       </div>
     );
   }
@@ -448,6 +619,7 @@ export default function PlayPage() {
         onEditName={handleEditDisplayName}
         isHost={isHost}
         onEndGame={handleEndGame}
+        onDeleteGame={handleDeleteGame}
         variant={isMobile ? "dropdown" : "sidebar"}
       />
     );
@@ -513,6 +685,8 @@ export default function PlayPage() {
         onEditName={handleEditDisplayName}
         isHost={isHost}
         onEndGame={handleEndGame}
+        onDeleteGame={handleDeleteGame}
+        pendingInvites={pendingGameInvites.map((inv) => ({ id: inv.id, email: inv.masked_email }))}
       />
     </div>
   );

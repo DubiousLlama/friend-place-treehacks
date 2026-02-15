@@ -52,6 +52,14 @@ export function AuthMergeChecker() {
       credentials: "include",
     });
     if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (typeof data.suggestedDisplayName === "string") {
+      try {
+        sessionStorage.setItem("fp-suggested-display-name", data.suggestedDisplayName);
+      } catch {
+        /* ignore */
+      }
+    }
     localStorage.removeItem(PENDING_MERGE_ANON_UID_KEY);
     setPendingAnonId(null);
     window.location.reload();
