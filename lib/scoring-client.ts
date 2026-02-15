@@ -14,6 +14,7 @@ import {
   euclideanDistance,
   MAX_GUESS_POINTS,
   getTargetBonusFraction,
+  getBestFriendBonus,
 } from "@/lib/scoring";
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,8 @@ export interface GuessScoreDetail {
   targetBonus: number;
   accuracy: number;
   distance: number;
+  /** Best friend bonus (e.g. 50) when within BEST_FRIEND_RADIUS, else 0. */
+  bestFriendBonus: number;
 }
 
 /** Full score breakdown for a single player. */
@@ -112,7 +115,8 @@ export function computeScoreBreakdowns(
       targetSelf.x,
       targetSelf.y,
     );
-    const guesserPoints = accuracy * MAX_GUESS_POINTS;
+    const bestFriendBonus = getBestFriendBonus(distance);
+    const guesserPoints = accuracy * MAX_GUESS_POINTS + bestFriendBonus;
     const targetBonus = guesserPoints * targetFraction;
 
     const detail: GuessScoreDetail = {
@@ -123,6 +127,7 @@ export function computeScoreBreakdowns(
       targetBonus: Math.round(targetBonus * 10) / 10,
       accuracy,
       distance,
+      bestFriendBonus,
     };
 
     // Add to guesser's breakdown
@@ -186,7 +191,8 @@ export function computeAllGuessDetails(
       targetSelf.x,
       targetSelf.y,
     );
-    const guesserPoints = accuracy * MAX_GUESS_POINTS;
+    const bestFriendBonus = getBestFriendBonus(distance);
+    const guesserPoints = accuracy * MAX_GUESS_POINTS + bestFriendBonus;
     const targetBonus = guesserPoints * targetFraction;
 
     details.push({
@@ -197,6 +203,7 @@ export function computeAllGuessDetails(
       targetBonus: Math.round(targetBonus * 10) / 10,
       accuracy,
       distance,
+      bestFriendBonus,
     });
   }
 

@@ -17,21 +17,13 @@ type Guess = Database["public"]["Tables"]["guesses"]["Row"];
 /** Maximum points a guesser can earn per correct guess (perfect placement). */
 export const MAX_GUESS_POINTS = 100;
 
-/**
- * Standard deviation for the Gaussian scoring falloff.
- *
- * Controls how quickly points drop with distance.  A smaller value
- * penalises mid-range guesses more aggressively.
- *
- * With σ = 0.25 on a 0-1 normalised board:
- *   d=0.0 → 100 pts, d=0.1 → 92 pts, d=0.2 → 73 pts,
- *   d=0.3 → 49 pts,  d=0.5 → 14 pts, d=0.7 → 2 pts
- */
-export const GAUSS_SIGMA = 0.3;
-export const HYPERGAUS_k = 4;
-export const HYPERGAUS_SIGMA = 0.3;
-export const HYPERGAUSS_WEIGHT = 0.15;
-export const GAUSS_WEIGHT = 0.5;
+/** Piecewise scoring: red segment y = -2x + 1 and green segment y = -0.2x + 0.2. */
+/** Distance at which we switch from red to green (intersection: 4/9). */
+export const PIECEWISE_KINK = 4 / 9;
+/** Bonus points when guess is within this distance of target. */
+export const BEST_FRIEND_BONUS = 50;
+/** Distance threshold for best friend bonus. */
+export const BEST_FRIEND_RADIUS = 0.15;
 
 /**
  * Fraction of guesser points the target receives: 1 / (numPlayers + 1).
@@ -58,12 +50,25 @@ export function euclideanDistance(
 }
 
 /**
- * Accuracy score for a single guess (0-1) using a Gaussian falloff.
- *
- * accuracy = exp(-distance² / (2 * σ²))
- *
- * A perfect guess (distance = 0) returns 1.
- * Points drop steeply for moderate distances, rewarding precision.
+ * Piecewise linear accuracy (0-1):
+ * - Red segment (distance <= 4/9): y = -2x + 1
+ * - Green segment (4/9 <= distance <= 1): y = -0.2x + 0.2
+ * - Distance > 1: 0
+ */
+export function linearAccuracyFromDistance(dist: number): number {
+  if (dist > 1) return 0;
+  if (dist <= PIECEWISE_KINK) return Math.max(0, -2 * dist + 1);
+  return Math.max(0, -0.2 * dist + 0.2);
+}
+
+/** Best friend bonus (BEST_FRIEND_BONUS) when distance <= BEST_FRIEND_RADIUS, else 0. */
+export function getBestFriendBonus(dist: number): number {
+  return dist <= BEST_FRIEND_RADIUS ? BEST_FRIEND_BONUS : 0;
+}
+
+/**
+ * Accuracy score for a single guess (0-1) using the piecewise linear
+ * (red segment -2x+1, green segment -0.2x+0.2).
  */
 export function guessAccuracy(
   guessX: number,
@@ -72,10 +77,7 @@ export function guessAccuracy(
   targetSelfY: number,
 ): number {
   const dist = euclideanDistance(guessX, guessY, targetSelfX, targetSelfY);
-  return (
-    GAUSS_WEIGHT * Math.exp(-(dist * dist) / (2 * GAUSS_SIGMA * GAUSS_SIGMA)) +
-    HYPERGAUSS_WEIGHT * Math.exp(-((dist / HYPERGAUS_SIGMA) ** HYPERGAUS_k))
-  ) / (GAUSS_WEIGHT + HYPERGAUSS_WEIGHT);
+  return linearAccuracyFromDistance(dist);
 }
 
 // ---------------------------------------------------------------------------
@@ -126,14 +128,14 @@ export function computeScores(
       continue;
     }
 
-    const accuracy = guessAccuracy(
+    const dist = euclideanDistance(
       guess.guess_x,
       guess.guess_y,
       targetSelf.x,
       targetSelf.y,
     );
-
-    const guesserPoints = accuracy * MAX_GUESS_POINTS;
+    const accuracy = linearAccuracyFromDistance(dist);
+    const guesserPoints = accuracy * MAX_GUESS_POINTS + getBestFriendBonus(dist);
     const targetBonus = guesserPoints * targetFraction;
 
     // Add guesser points

@@ -145,6 +145,12 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
     [gamePlayers, allGuesses, loadingGuesses],
   );
 
+  // Any guess on the board earned the best friend bonus (for legend visibility)
+  const hasAnyBestFriendBonus = useMemo(
+    () => guessDetails.some((d) => d.bestFriendBonus > 0),
+    [guessDetails],
+  );
+
   // Guess lookup by ID
   const guessLookup = useMemo(() => {
     const m = new Map<string, Guess>();
@@ -612,6 +618,8 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
         const isActive = activeBreakdown === player.gamePlayerId;
         const isMe = gpLookup.get(player.gamePlayerId)?.player_id === currentPlayerId;
         const playerBreakdown = isActive ? breakdowns.get(player.gamePlayerId) : null;
+        const totalBestFriendBonus =
+          breakdowns.get(player.gamePlayerId)?.guessDetails.reduce((s, d) => s + d.bestFriendBonus, 0) ?? 0;
 
         return (
           <div key={player.gamePlayerId} className="flex flex-col gap-0">
@@ -700,27 +708,36 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
                     const targetColor = colorMap.get(detail.targetId);
                     const distanceStr = detail.distance.toFixed(2);
                     return (
-                      <div
-                        key={detail.guessId}
-                        className="flex items-start gap-2 text-xs font-body text-secondary leading-tight"
-                        onMouseEnter={() => !isMobile && setHoveredGuessTargetId(detail.targetId)}
-                        onMouseLeave={() => !isMobile && setHoveredGuessTargetId(null)}
-                      >
-                        <span
-                          className="shrink-0 rounded-full mt-0.5"
-                          style={{
-                            width: 8,
-                            height: 8,
-                            backgroundColor: targetColor?.color ?? "#888",
-                          }}
-                        />
-                        <span className="flex-1 line-clamp-2 leading-tight min-w-0">
-                          {distanceStr} units away from {targetName}
-                        </span>
-                        <span className="font-medium text-foreground tabular-nums shrink-0 pt-px">
-                          +{Math.round(detail.guesserPoints)}
-                        </span>
-                      </div>
+                      <React.Fragment key={detail.guessId}>
+                        <div
+                          className="flex items-start gap-2 text-xs font-body text-secondary leading-tight"
+                          onMouseEnter={() => !isMobile && setHoveredGuessTargetId(detail.targetId)}
+                          onMouseLeave={() => !isMobile && setHoveredGuessTargetId(null)}
+                        >
+                          <span
+                            className="shrink-0 rounded-full mt-0.5"
+                            style={{
+                              width: 8,
+                              height: 8,
+                              backgroundColor: targetColor?.color ?? "#888",
+                            }}
+                          />
+                          <span className="flex-1 line-clamp-2 leading-tight min-w-0">
+                            {distanceStr} units away from {targetName}
+                          </span>
+                          <span className="font-medium text-foreground tabular-nums shrink-0 pt-px">
+                            +{Math.round(detail.guesserPoints)}
+                          </span>
+                        </div>
+                        {detail.bestFriendBonus > 0 && (
+                          <div className="flex items-start gap-2 text-xs font-body text-secondary leading-tight">
+                            <span className="w-2 shrink-0" aria-hidden />
+                            <span className="flex-1 line-clamp-2 leading-tight min-w-0">
+                              Best friend bonus +{detail.bestFriendBonus}
+                            </span>
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                   {playerBreakdown.bonusDetails.length > 0 && (() => {
@@ -787,6 +804,25 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
           />
           <span className="text-xs font-body text-secondary">Guess by another player</span>
         </div>
+        {hasAnyBestFriendBonus && (
+          <div className="flex items-center gap-2">
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: resultsSizes.guessDotSize,
+                height: resultsSizes.guessDotSize,
+                marginLeft: (resultsSizes.selfDotSize * 0.7 - resultsSizes.guessDotSize) / 2,
+                marginRight: (resultsSizes.selfDotSize * 0.7 - resultsSizes.guessDotSize) / 2,
+                fontSize: resultsSizes.guessDotSize * 2,
+                lineHeight: 1,
+                color: "#888",
+              }}
+            >
+              ★
+            </span>
+            <span className="text-xs font-body text-secondary">Spectacular guess by another player</span>
+          </div>
+        )}
       </div>
 
     </div>
@@ -865,14 +901,28 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
               if (isMobile) handleNetworkTap(detail.targetId);
             }}
           >
-            <div
-              className="rounded-full"
-              style={{
-                width: resultsSizes.guessDotSize,
-                height: resultsSizes.guessDotSize,
-                backgroundColor: guessDotColor?.color,
-              }}
-            />
+            {detail.bestFriendBonus > 0 ? (
+              <span
+                className="select-none"
+                style={{
+                  fontSize: resultsSizes.guessDotSize * 2.5,
+                  lineHeight: 1,
+                  color: guessDotColor?.color ?? "#888",
+                }}
+                aria-label="Spectacular guess"
+              >
+                ★
+              </span>
+            ) : (
+              <div
+                className="rounded-full"
+                style={{
+                  width: resultsSizes.guessDotSize,
+                  height: resultsSizes.guessDotSize,
+                  backgroundColor: guessDotColor?.color,
+                }}
+              />
+            )}
           </div>
         );
       })}
