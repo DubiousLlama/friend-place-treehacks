@@ -74,16 +74,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = parseAxisLines(raw, axis);
-    if (!result) {
-      console.error("[suggest-axes] parseAxisLines failed. Raw response:", raw.slice(0, 400));
-      return json500(
-        "Failed to generate axes. Try again or enter your own!",
-        `parse failed. Raw (first 300 chars): ${raw.slice(0, 300)}`,
-      );
-    }
-
     if (axis === "horizontal") {
+      const result = parseAxisLines(raw, "horizontal");
+      if (!result) {
+        console.error("[suggest-axes] parseAxisLines failed. Raw response:", raw.slice(0, 400));
+        return json500(
+          "Failed to generate axes. Try again or enter your own!",
+          `parse failed. Raw (first 300 chars): ${raw.slice(0, 300)}`,
+        );
+      }
       const xLow = result.x_low?.trim();
       const xHigh = result.x_high?.trim();
       if (!xLow || !xHigh) {
@@ -93,6 +92,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ x_low: xLow, x_high: xHigh });
     }
 
+    const result = parseAxisLines(raw, "vertical");
+    if (!result) {
+      console.error("[suggest-axes] parseAxisLines failed. Raw response:", raw.slice(0, 400));
+      return json500(
+        "Failed to generate axes. Try again or enter your own!",
+        `parse failed. Raw (first 300 chars): ${raw.slice(0, 300)}`,
+      );
+    }
     const yLow = result.y_low?.trim();
     const yHigh = result.y_high?.trim();
     if (!yLow || !yHigh) {

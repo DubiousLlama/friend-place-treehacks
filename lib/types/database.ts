@@ -25,18 +25,21 @@ export type Database = {
           display_name: string | null;
           created_at: string;
           linked_at: string | null;
+          onboarding_plays_seen: number;
         };
         Insert: {
           id: string;
           display_name?: string | null;
           created_at?: string;
           linked_at?: string | null;
+          onboarding_plays_seen?: number;
         };
         Update: {
           id?: string;
           display_name?: string | null;
           created_at?: string;
           linked_at?: string | null;
+          onboarding_plays_seen?: number;
         };
         Relationships: [];
       };

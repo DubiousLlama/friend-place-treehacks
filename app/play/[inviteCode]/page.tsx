@@ -11,6 +11,8 @@ import { ResultsView } from "@/components/ResultsView";
 import type { Database } from "@/lib/types/database";
 import type { Position } from "@/lib/game-types";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useAuth } from "@/lib/use-auth";
+import { OnboardingInstructionModal } from "@/components/OnboardingInstructionModal";
 
 type Game = Database["public"]["Tables"]["games"]["Row"];
 type GamePlayer = Database["public"]["Tables"]["game_players"]["Row"];
@@ -30,11 +32,56 @@ export default function PlayPage() {
   // View mode: "graph" or "dashboard"
   const [view, setView] = useState<"graph" | "dashboard">("graph");
 
+  // Placing step: "self" (place yourself) or "others" (place friends). Used so popup 2 only shows when it's time to place friends.
+  const [placingStep, setPlacingStep] = useState<"self" | "others">("self");
+
   // When true, NameSelector is shown in "switch" mode (current data preserved)
   const [switchingIdentity, setSwitchingIdentity] = useState(false);
 
   const isMobile = useIsMobile();
+  const { isLinked } = useAuth();
   const supabase = createClient();
+
+  // mySlot: current user's game_players row (defined early so onboarding effect can use it)
+  const mySlot =
+    game && currentPlayerId
+      ? gamePlayers.find((gp) => gp.player_id === currentPlayerId) ?? null
+      : null;
+
+  // Onboarding: show instruction popup first two times in placing phase (account overrides localStorage)
+  const ONBOARDING_KEY = "fp-onboarding-plays-seen";
+  const [onboardingCount, setOnboardingCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!game || game.phase !== "placing" || !mySlot) return;
+    let cancelled = false;
+    if (isLinked) {
+      fetch("/api/onboarding/count")
+        .then((res) => (res.ok ? res.json() : { count: 0 }))
+        .then((data: { count: number }) => {
+          if (!cancelled) setOnboardingCount(data.count ?? 0);
+        })
+        .catch(() => {
+          if (!cancelled) setOnboardingCount(0);
+        });
+    } else {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(ONBOARDING_KEY) : null;
+      const n = raw !== null ? parseInt(raw, 10) : 0;
+      if (!cancelled) setOnboardingCount(Number.isNaN(n) ? 0 : Math.min(Math.max(0, n), 2));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [game?.id, game?.phase, mySlot?.id, isLinked]);
+
+  const handleOnboardingDismiss = useCallback(async () => {
+    const next = onboardingCount === null ? 2 : Math.min(onboardingCount + 1, 2);
+    setOnboardingCount(next);
+    if (isLinked) {
+      await fetch("/api/onboarding/seen", { method: "POST" });
+    } else if (typeof window !== "undefined") {
+      localStorage.setItem(ONBOARDING_KEY, String(next));
+    }
+  }, [onboardingCount, isLinked]);
 
   const fetchAll = useCallback(async () => {
     // Ensure session
@@ -184,13 +231,14 @@ export default function PlayPage() {
       );
       if (!mySlot) return;
 
-      // 1. Update self placement
+      // 1. Update self placement and denormalized guesses count (so others see x/n placed)
       const { error: selfErr } = await supabase
         .from("game_players")
         .update({
           self_x: selfPosition.x,
           self_y: selfPosition.y,
           has_submitted: true,
+          guesses_count: guesses.length,
         })
         .eq("id", mySlot.id);
 
@@ -317,11 +365,6 @@ export default function PlayPage() {
     );
   }
 
-  // Has the current user claimed a name slot?
-  const mySlot = gamePlayers.find(
-    (gp) => gp.player_id === currentPlayerId
-  );
-
   // Not claimed yet, or actively switching identity — show NameSelector
   if (!mySlot || switchingIdentity) {
     return (
@@ -373,6 +416,14 @@ export default function PlayPage() {
 
   const guessedCount = myGuesses.length;
 
+  // Popup 1: when first time (count 0). Popup 2: only when count 1 and user has placed self (step "others").
+  const onboardingVariant =
+    onboardingCount === 0
+      ? 1
+      : onboardingCount === 1 && view === "graph" && placingStep === "others"
+        ? 2
+        : null;
+
   // Graph view: first visit starts here; returning users can get here via
   // "Continue placing" from the dashboard.
   if (view === "graph") {
@@ -393,6 +444,12 @@ export default function PlayPage() {
 
     return (
       <div className="flex-1 min-h-0 flex flex-col bg-surface overflow-y-auto">
+        {onboardingVariant && (
+          <OnboardingInstructionModal
+            variant={onboardingVariant}
+            onDismiss={handleOnboardingDismiss}
+          />
+        )}
         {/* Graph placing experience — fills available space */}
         <div className="flex-1 min-h-[85dvh]">
           <PlacingPhase
@@ -404,6 +461,7 @@ export default function PlayPage() {
             initialOtherPositions={initialOtherPositions}
             onSubmit={handleSubmitPlacements}
             sidebarContent={gameInfoPanel}
+            onStepChange={setPlacingStep}
           />
         </div>
       </div>
@@ -413,6 +471,12 @@ export default function PlayPage() {
   // Dashboard view
   return (
     <div className="min-h-screen py-10 px-4 bg-surface">
+      {onboardingVariant && (
+        <OnboardingInstructionModal
+          variant={onboardingVariant}
+          onDismiss={handleOnboardingDismiss}
+        />
+      )}
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-foreground font-display">
           Friend Place

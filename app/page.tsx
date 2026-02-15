@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generateInviteCode } from "@/lib/utils";
 import { useAuth } from "@/lib/use-auth";
+import { SampleAxisPreview } from "@/components/SampleAxisPreview";
 import type { Database } from "@/lib/types/database";
 
 type SavedGroup = Database["public"]["Tables"]["saved_groups"]["Row"];
@@ -314,22 +315,47 @@ export default function Home() {
     }
   };
 
+  const scrollToCreateGame = () => {
+    document.getElementById("create-game")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 font-sans">
+    <div className="flex min-h-screen flex-col items-center px-4 py-12 font-sans">
       <main className="w-full max-w-lg flex flex-col items-center gap-8">
         <div className="flex flex-col gap-3 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-black">
-            Friend Place
-          </h1>
           <p className="text-secondary">
             Place yourself on the chart, then guess where your friends placed themselves.
             Share the link and see who knows each other best.
           </p>
         </div>
 
+        {/* Daily axis hero: graph is the clickable area, scrolls to create game */}
+        <button
+          type="button"
+          onClick={scrollToCreateGame}
+          className="w-full flex flex-col items-center gap-2 text-left hover:opacity-90 active:opacity-95 transition-opacity cursor-pointer"
+          aria-label="Today's axes — tap to create a game"
+        >
+          <span className="text-sm font-medium text-black">
+            {loadingAxes ? "Loading today's axes…" : "Today's axes"}
+          </span>
+          {dailyAxes && !loadingAxes && (
+            <SampleAxisPreview
+              axisXLow={dailyAxes.x_low}
+              axisXHigh={dailyAxes.x_high}
+              axisYLow={dailyAxes.y_low}
+              axisYHigh={dailyAxes.y_high}
+            />
+          )}
+          <span className="text-xs text-secondary">
+            Tap to create a game
+          </span>
+        </button>
+
         <form
+          id="create-game"
           onSubmit={handleCreateGame}
-          className="w-full min-w-0 max-w-lg rounded-xl border border-surface-muted bg-white p-6 flex flex-col gap-6"
+          className="w-full min-w-0 max-w-lg rounded-xl border border-surface-muted bg-white p-6 flex flex-col gap-6 scroll-mt-8"
         >
           <h2 className="text-lg font-semibold text-black">
             Create a game

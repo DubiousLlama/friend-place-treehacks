@@ -183,7 +183,7 @@ export default function ProfilePage() {
         Account
       </h1>
       <p className="mt-1 text-sm text-secondary">
-        {displayName ?? user.email ?? "Signed in"}
+        {displayName ?? user?.email ?? "Signed in"}
       </p>
 
       {loading ? (

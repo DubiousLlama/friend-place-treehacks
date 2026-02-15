@@ -338,7 +338,7 @@ export function GameDashboard({
                   statusText = `${guessedCount}/${totalFriends} placed`;
                   statusColor = "text-accent";
                 } else if (hasPlaced) {
-                  statusText = "Self placed";
+                  statusText = `0/${totalFriends} placed`;
                   statusColor = "text-accent";
                 } else {
                   statusText = "Joined";
@@ -348,14 +348,11 @@ export function GameDashboard({
                 // For other players, show guess count progress
                 const theirTotal = gamePlayers.filter((g) => g.id !== gp.id).length;
                 const theirCount = gp.guesses_count ?? 0;
-                if (theirCount > 0) {
+                if (hasPlaced || theirCount > 0) {
                   statusText = `${theirCount}/${theirTotal} placed`;
-                  statusColor = theirCount === theirTotal
+                  statusColor = theirCount === theirTotal && theirTotal > 0
                     ? "text-splash"
                     : "text-accent";
-                } else if (hasPlaced) {
-                  statusText = "Self placed";
-                  statusColor = "text-accent";
                 } else {
                   statusText = "Joined";
                   statusColor = "text-secondary";

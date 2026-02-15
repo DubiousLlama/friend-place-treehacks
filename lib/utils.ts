@@ -22,19 +22,34 @@ export function buildShareText(url: string): { title: string; text: string } {
 }
 
 /**
- * Attempt to use the native Web Share API. Falls back to clipboard copy.
+ * True when the device is likely a phone (or small tablet) so we can use the native share sheet.
+ * Desktop browsers (including Chromium) skip the share API and use copy instead.
+ */
+function isMobileSharePreferred(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Mobi|Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+}
+
+/**
+ * On phone OSes: use the native Web Share API when available.
+ * On desktop (including Chromium): always copy the link to clipboard.
  * Returns "shared" | "copied" | "failed".
  */
 export async function shareOrCopy(url: string): Promise<"shared" | "copied" | "failed"> {
   const { title, text } = buildShareText(url);
 
-  // Use Web Share API when available (most mobile browsers + some desktop)
-  if (typeof navigator !== "undefined" && navigator.share) {
+  // Only use Web Share API on mobile; desktop/Chromium should just copy
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.share &&
+    isMobileSharePreferred()
+  ) {
     try {
       await navigator.share({ title, text, url });
       return "shared";
     } catch (err) {
-      // User cancelled the share sheet — not an error, but nothing happened
       if (err instanceof DOMException && err.name === "AbortError") {
         return "failed";
       }
@@ -42,7 +57,7 @@ export async function shareOrCopy(url: string): Promise<"shared" | "copied" | "f
     }
   }
 
-  // Fallback: copy link to clipboard
+  // Desktop or fallback: copy link to clipboard
   if (typeof navigator !== "undefined" && navigator.clipboard) {
     try {
       await navigator.clipboard.writeText(url);

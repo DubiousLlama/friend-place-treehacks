@@ -31,6 +31,8 @@ interface PlacingPhaseProps {
   ) => void;
   /** Content rendered in the desktop sidebar (e.g. GameInfoPanel) */
   sidebarContent?: React.ReactNode;
+  /** Called when the current step changes (e.g. for onboarding popup timing) */
+  onStepChange?: (step: Step) => void;
 }
 
 type Step = "self" | "others";
@@ -44,6 +46,7 @@ export function PlacingPhase({
   initialOtherPositions,
   onSubmit,
   sidebarContent,
+  onStepChange,
 }: PlacingPhaseProps) {
   const graphRef = useRef<HTMLDivElement | null>(null);
 
@@ -96,6 +99,10 @@ export function PlacingPhase({
     initialSelfPosition
   );
   const [selfVersion, setSelfVersion] = useState(0);
+
+  useEffect(() => {
+    onStepChange?.(step);
+  }, [step, onStepChange]);
 
   // Initialize other positions: pre-populate from DB for previously guessed friends
   const [otherPositions, setOtherPositions] = useState<Map<string, Position | null>>(
@@ -272,7 +279,9 @@ export function PlacingPhase({
       `}
     >
       {placedCount === totalCount && totalCount > 0
-        ? `Submit all ${totalCount} placement${totalCount !== 1 ? "s" : ""}`
+        ? totalCount === 1
+          ? "Submit placement"
+          : "Submit placements"
         : placedCount > 0
           ? `${placedCount} of ${totalCount} placed`
           : "Place friends, then submit"}

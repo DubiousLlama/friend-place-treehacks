@@ -8,7 +8,7 @@ import type { GraphSizeConfig } from "@/lib/sizes";
 import { DESKTOP_SIZES } from "@/lib/sizes";
 import { pixelToNormalized, normalizedToPercent } from "@/lib/graph-utils";
 import { springTransition, tapScale, hoverLift } from "@/lib/motion";
-import { dragShadowTray, dragShadowPlaced, hoverShadow } from "@/lib/theme";
+import { dragShadowTray, dragShadowPlaced, hoverShadow, theme, rgba } from "@/lib/theme";
 
 interface PlayerTokenProps {
   /** Unique identifier for layoutId animations */
@@ -88,8 +88,10 @@ export function PlayerToken({
   const isSelf = variant === "self";
   const colorClass = isSelf ? "bg-splash" : "bg-accent";
 
-  // Destructure pixel sizes from config
+  // Destructure pixel sizes from config; self dot larger when placed, friend dots slightly smaller
   const { dotSize, hitSize, labelOffset, labelFontSize, labelPadX, labelPadY, pillHeight, pillFontSize, pillPadX } = sizes;
+  const selfDotSize = position !== null && isSelf ? Math.round(dotSize * 1.2) : dotSize;
+  const effectiveDotSize = position !== null && !isSelf ? Math.round(dotSize * 0.88) : dotSize;
 
   // --- Scale + auto-scroll compensation ---
   const compensateX = useMotionValue(0);
@@ -285,15 +287,26 @@ export function PlayerToken({
           borderRadius: "50%",
         }}
       >
-        {/* Dot */}
+        {/* Dot — self on graph matches results view (white ring + shadow); friend slightly smaller */}
         <div
-          className={`rounded-full ${colorClass} shadow-sm`}
-          style={{ width: dotSize, height: dotSize }}
+          className={isSelf && position !== null ? "" : `rounded-full ${colorClass} shadow-sm`}
+          style={
+            isSelf && position !== null
+              ? {
+                  width: selfDotSize,
+                  height: selfDotSize,
+                  borderRadius: "50%",
+                  backgroundColor: theme.splash,
+                  border: "3px solid white",
+                  boxShadow: `0 0 0 1px ${rgba(theme.splash, 0.5)}, 0 1px 3px rgba(0,0,0,0.15)`,
+                }
+              : { width: effectiveDotSize, height: effectiveDotSize }
+          }
         />
 
-        {/* External label */}
+        {/* External label — match results-view nametag style */}
         <span
-          className="font-body font-medium text-foreground bg-white/80 rounded select-none leading-tight"
+          className={`font-display font-semibold rounded shadow-sm select-none leading-tight bg-white/90 ${isSelf ? "text-splash" : "text-accent"}`}
           style={{
             fontSize: labelFontSize,
             paddingLeft: labelPadX,

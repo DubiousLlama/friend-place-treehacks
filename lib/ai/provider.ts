@@ -62,6 +62,18 @@ function cleanLabel(s: string): string {
  */
 export function parseAxisLines(
   text: string,
+  kind: "full",
+): { x_low: string; x_high: string; y_low: string; y_high: string } | null;
+export function parseAxisLines(
+  text: string,
+  kind: "horizontal",
+): { x_low: string; x_high: string } | null;
+export function parseAxisLines(
+  text: string,
+  kind: "vertical",
+): { y_low: string; y_high: string } | null;
+export function parseAxisLines(
+  text: string,
   kind: "full" | "horizontal" | "vertical",
 ):
   | { x_low: string; x_high: string; y_low: string; y_high: string }
