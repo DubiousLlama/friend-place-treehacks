@@ -184,10 +184,6 @@ export default function PlayPage() {
       );
       if (!mySlot) return;
 
-      // #region agent log
-      const _dbg = (msg: string, data: Record<string, unknown>) => { fetch('http://127.0.0.1:7242/ingest/51997ba0-9d25-4154-b510-db94c1e13d2e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:submit',message:msg,data,timestamp:Date.now()})}).catch(()=>{}); };
-      // #endregion
-
       // 1. Update self placement
       const { error: selfErr } = await supabase
         .from("game_players")
@@ -200,10 +196,6 @@ export default function PlayPage() {
 
       if (selfErr) console.error("Failed to update self placement:", selfErr);
 
-      // #region agent log
-      _dbg('self_placement_update', { mySlotId: mySlot.id, selfErr: selfErr?.message ?? null, selfPosition });
-      // #endregion
-
       // 2. Delete all existing guesses by this user for this game
       const { error: delErr } = await supabase
         .from("guesses")
@@ -212,10 +204,6 @@ export default function PlayPage() {
         .eq("guesser_game_player_id", mySlot.id);
 
       if (delErr) console.error("Failed to delete old guesses:", delErr);
-
-      // #region agent log
-      _dbg('guesses_delete', { delErr: delErr?.message ?? null });
-      // #endregion
 
       // 3. Re-insert all current guesses (both previously placed + newly placed)
       if (guesses.length > 0) {
@@ -230,24 +218,11 @@ export default function PlayPage() {
         );
 
         if (insErr) console.error("Failed to insert guesses:", insErr);
-
-        // #region agent log
-        _dbg('guesses_insert', { guessCount: guesses.length, insErr: insErr?.message ?? null });
-        // #endregion
       }
 
       // 4. Check if game should end (early-end or time-based)
-      try {
-        const { data: rpcResult, error: rpcErr } = await supabase.rpc("check_and_end_game", { p_game_id: game.id });
-        // #region agent log
-        _dbg('check_end_rpc', { rpcResult, rpcErr: rpcErr?.message ?? null });
-        // #endregion
-        if (rpcErr) console.error("check_and_end_game RPC error:", rpcErr);
-      } catch (checkEndErr) {
-        // #region agent log
-        _dbg('check_end_rpc_failed', { error: String(checkEndErr) });
-        // #endregion
-      }
+      const { error: rpcErr } = await supabase.rpc("check_and_end_game", { p_game_id: game.id });
+      if (rpcErr) console.error("check_and_end_game RPC error:", rpcErr);
 
       // 5. Refresh data and switch to dashboard
       await fetchAll();
