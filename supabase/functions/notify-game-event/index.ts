@@ -113,7 +113,7 @@ async function sendNewGameInvite(gameId: string, playerId: string): Promise<void
     inviteCode: game.invite_code,
   };
   const message = await generateNotificationMessage("new_game_invite", context);
-  const body = message ?? `You were added to a Friend Place game. Axes: ${game.axis_x_label_low}–${game.axis_x_label_high} / ${game.axis_y_label_low}–${game.axis_y_label_high}. Open the app to play!`;
+  const body = message ?? `You were added to a FriendPlace game. Axes: ${game.axis_x_label_low}–${game.axis_x_label_high} / ${game.axis_y_label_low}–${game.axis_y_label_high}. Open the app to play!`;
   const channel = await getNotificationChannel();
   const result = await channel.send(recipient.to, body);
   if (!result.success) {

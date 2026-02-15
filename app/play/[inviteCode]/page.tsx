@@ -661,7 +661,7 @@ export default function PlayPage() {
       )}
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-bold text-foreground font-display">
-          Friend Place
+          FriendPlace
         </h1>
         <p className="text-sm text-secondary mt-1">
           {game.axis_x_label_low} vs. {game.axis_x_label_high} &nbsp;|&nbsp;{" "}

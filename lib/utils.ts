@@ -36,8 +36,8 @@ export function maskEmail(email: string): string {
  */
 export function buildShareText(url: string): { title: string; text: string } {
   return {
-    title: "Friend Place",
-    text: `Join my Friend Place game!\n${url}`,
+    title: "FriendPlace",
+    text: `Join my FriendPlace game!\n${url}`,
   };
 }
 

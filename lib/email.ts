@@ -13,13 +13,13 @@ export interface SendInviteEmailParams {
   joinUrl: string;
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "Friend Place <onboarding@resend.dev>";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "FriendPlace <onboarding@resend.dev>";
 
 function buildInviteSubject(params: SendInviteEmailParams): string {
   if (params.type === "group") {
-    return `You're invited to join ${params.groupName ?? "a group"} on Friend Place`;
+    return `You're invited to join ${params.groupName ?? "a group"} on FriendPlace`;
   }
-  return "You're invited to a game on Friend Place";
+  return "You're invited to a game on FriendPlace";
 }
 
 function buildInviteHtml(params: SendInviteEmailParams): string {
@@ -27,7 +27,7 @@ function buildInviteHtml(params: SendInviteEmailParams): string {
   const cta = type === "game" ? "Join the game" : "Join now";
   const preheader =
     type === "group"
-      ? `Join ${groupName ?? "the group"} on Friend Place.`
+      ? `Join ${groupName ?? "the group"} on FriendPlace.`
       : "Click the link below to join the game.";
   const expiryLine =
     type === "game"

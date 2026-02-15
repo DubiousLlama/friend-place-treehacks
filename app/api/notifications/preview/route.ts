@@ -12,7 +12,7 @@ import {
 import { aiConfig, isAIAvailable } from "@/lib/ai/config";
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
-const SUBJECT_PREFIX = process.env.RESEND_SUBJECT_PREFIX ?? "Friend Place: ";
+const SUBJECT_PREFIX = process.env.RESEND_SUBJECT_PREFIX ?? "FriendPlace: ";
 
 /**
  * Preview notification email content without sending.

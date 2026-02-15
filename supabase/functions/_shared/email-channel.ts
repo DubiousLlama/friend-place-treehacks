@@ -4,8 +4,8 @@ const RESEND_API = "https://api.resend.com/emails";
 
 export function createEmailChannel(): NotificationChannel {
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "Friend Place <onboarding@resend.dev>";
-  const subjectPrefix = Deno.env.get("RESEND_SUBJECT_PREFIX") ?? "Friend Place: ";
+  const fromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "FriendPlace <onboarding@resend.dev>";
+  const subjectPrefix = Deno.env.get("RESEND_SUBJECT_PREFIX") ?? "FriendPlace: ";
 
   return {
     async send(to: string, body: string): Promise<{ success: boolean; error?: string }> {

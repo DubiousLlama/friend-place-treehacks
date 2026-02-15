@@ -67,7 +67,7 @@ export async function sendResultsRemindersForGame(game: GameRow): Promise<void> 
     };
 
     const message = await generateNotificationMessage("results_reminder", context);
-    const body = message ?? "Your Friend Place game results are in. See how your friends placed you!";
+    const body = message ?? "Your FriendPlace game results are in. See how your friends placed you!";
     const result = await channel.send(recipient.to, body);
     if (!result.success) {
       console.error("[results-reminder] send failed:", result.error);

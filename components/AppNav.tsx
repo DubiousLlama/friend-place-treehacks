@@ -56,7 +56,7 @@ export function AppNav() {
           href="/"
           className="font-display text-lg font-bold text-foreground no-underline hover:text-splash"
         >
-          Friend Place
+          FriendPlace
         </Link>
       </div>
       <div className="flex items-center gap-2 min-w-0 w-1/3 justify-end">

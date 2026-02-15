@@ -180,7 +180,7 @@ export default function ProfilePage() {
         const slot = slotsByGameId.get(game.id);
         return {
           game,
-          groupName: game.group_id ? groupNames[game.group_id] ?? "ΓÇö" : "ΓÇö",
+          groupName: game.group_id ? (groupNames[game.group_id] ?? "") : "",
           streak: getGroupStreak(allGroupGames, game.group_id),
           selfX: slot?.self_x ?? null,
           selfY: slot?.self_y ?? null,
@@ -259,11 +259,11 @@ export default function ProfilePage() {
           rankHistoryList.push({
             gameId: game.id,
             inviteCode: game.invite_code,
-            axesLabel: `${game.axis_x_label_low}ΓÇô${game.axis_x_label_high} / ${game.axis_y_label_low}ΓÇô${game.axis_y_label_high}`,
+            axesLabel: `${game.axis_x_label_low} - ${game.axis_x_label_high} / ${game.axis_y_label_low} - ${game.axis_y_label_high}`,
             createdAt: game.created_at,
             myRank: rank,
             totalPlayers: sorted.length,
-            groupName: g.group_id ? (pastGroupNames[g.group_id] ?? "ΓÇö") : "ΓÇö",
+            groupName: g.group_id ? (pastGroupNames[g.group_id] ?? "") : "",
           });
         }
 
@@ -342,7 +342,7 @@ export default function ProfilePage() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-6">
         <div className="text-center max-w-md">
           <p className="text-foreground font-medium">
-            YouΓÇÖre playing anonymously
+            You're playing anonymously
           </p>
           <p className="mt-1 text-sm text-secondary">
             While anonoymous, you can only play games on this device and will lose access to your games if you clear your cookies.
@@ -388,14 +388,14 @@ export default function ProfilePage() {
                     key={t.id}
                     className="inline-flex items-center gap-1 rounded-full bg-surface border border-surface-muted px-3 py-1 text-sm text-black"
                   >
-                    {t.label} {t.agreement_pct}%
+                    {t.agreement_pct}% {t.label}
                     <button
                       type="button"
                       onClick={() => removeFeaturedTag(t.id)}
                       className="ml-0.5 rounded p-0.5 hover:bg-surface-muted"
                       aria-label={`Remove ${t.label}`}
                     >
-                      ├ù
+                      ×
                     </button>
                   </span>
                 ))}
@@ -427,7 +427,7 @@ export default function ProfilePage() {
                             onClick={() => addFeaturedTag(c)}
                             className="w-full rounded-lg border border-surface-muted bg-surface px-3 py-2 text-left text-sm text-black hover:bg-surface-muted transition-colors"
                           >
-                            {c.label} {c.agreement_pct}%
+                            {c.agreement_pct}% {c.label}
                           </button>
                         </li>
                       ))}
@@ -507,51 +507,29 @@ export default function ProfilePage() {
                 </p>
               ) : (
                 <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-2 w-full">
-                  <div className="flex flex-col gap-3 min-w-max w-max">
-                    <div className="flex gap-3">
-                      {scoreHistory.filter((_, i) => i % 2 === 0).map((entry) => (
-                        <Link
-                          key={entry.gameId}
-                          href={`/play/${entry.inviteCode}`}
-                          className="block w-48 shrink-0 rounded-lg border border-surface-muted bg-surface p-3 text-black hover:bg-surface-muted transition-colors"
-                        >
-                          <div className="text-sm font-medium truncate">
-                            {entry.axesLabel}
-                          </div>
+                  <div className="flex flex-wrap gap-3">
+                    {scoreHistory.map((entry) => (
+                      <Link
+                        key={entry.gameId}
+                        href={`/play/${entry.inviteCode}`}
+                        className="block w-48 shrink-0 rounded-lg border border-surface-muted bg-surface p-3 text-black hover:bg-surface-muted transition-colors"
+                      >
+                        <div className="text-sm font-medium truncate">
+                          {entry.axesLabel}
+                        </div>
+                        {entry.groupName ? (
                           <div className="text-xs text-secondary mt-0.5 truncate">
-                            {entry.groupName || "ΓÇö"}
+                            {entry.groupName}
                           </div>
-                          <div className="text-xs text-secondary mt-1">
-                            You placed {entry.myRank}{getRankSuffix(entry.myRank)} of {entry.totalPlayers}
-                          </div>
-                          <div className="text-xs text-secondary mt-0.5">
-                            {new Date(entry.createdAt).toLocaleDateString()}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                    <div className="flex gap-3">
-                      {scoreHistory.filter((_, i) => i % 2 === 1).map((entry) => (
-                        <Link
-                          key={entry.gameId}
-                          href={`/play/${entry.inviteCode}`}
-                          className="block w-48 shrink-0 rounded-lg border border-surface-muted bg-surface p-3 text-black hover:bg-surface-muted transition-colors"
-                        >
-                          <div className="text-sm font-medium truncate">
-                            {entry.axesLabel}
-                          </div>
-                          <div className="text-xs text-secondary mt-0.5 truncate">
-                            {entry.groupName || "ΓÇö"}
-                          </div>
-                          <div className="text-xs text-secondary mt-1">
-                            You placed {entry.myRank}{getRankSuffix(entry.myRank)} of {entry.totalPlayers}
-                          </div>
-                          <div className="text-xs text-secondary mt-0.5">
-                            {new Date(entry.createdAt).toLocaleDateString()}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
+                        ) : null}
+                        <div className="text-xs text-secondary mt-1">
+                          You placed {entry.myRank}{getRankSuffix(entry.myRank)} of {entry.totalPlayers}
+                        </div>
+                        <div className="text-xs text-secondary mt-0.5">
+                          {new Date(entry.createdAt).toLocaleDateString()}
+                        </div>
+                      </Link>
+                    ))}
                   </div>
                 </div>
               )}

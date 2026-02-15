@@ -539,53 +539,28 @@ export default function GroupDetailPage() {
               </Link>
             </div>
             <div className="overflow-x-auto overflow-y-hidden pb-2 -mx-2 w-full">
-              <div className="flex flex-col gap-3 min-w-max w-max">
-                <div className="flex gap-3">
-                  {gamesWithWinners.filter((_, i) => i % 2 === 0).map(({ game }) => (
-                    <Link
-                      key={game.id}
-                      href={`/play/${game.invite_code}`}
-                      className="flex shrink-0 w-32 flex-col rounded-lg border border-surface-muted bg-surface text-black hover:bg-surface-muted transition-colors overflow-hidden"
-                    >
-                      <div className="w-32 h-32 p-1.5">
-                        <GameGridPreview
-                          axisXLow={game.axis_x_label_low}
-                          axisXHigh={game.axis_x_label_high}
-                          axisYLow={game.axis_y_label_low}
-                          axisYHigh={game.axis_y_label_high}
-                          selfPosition={null}
-                          otherPositions={[]}
-                        />
-                      </div>
-                      <div className="text-[10px] text-secondary text-center px-1 pb-1 truncate">
-                        {new Date(game.created_at).toLocaleDateString()}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-                <div className="flex gap-3">
-                  {gamesWithWinners.filter((_, i) => i % 2 === 1).map(({ game }) => (
-                    <Link
-                      key={game.id}
-                      href={`/play/${game.invite_code}`}
-                      className="flex shrink-0 w-32 flex-col rounded-lg border border-surface-muted bg-surface text-black hover:bg-surface-muted transition-colors overflow-hidden"
-                    >
-                      <div className="w-32 h-32 p-1.5">
-                        <GameGridPreview
-                          axisXLow={game.axis_x_label_low}
-                          axisXHigh={game.axis_x_label_high}
-                          axisYLow={game.axis_y_label_low}
-                          axisYHigh={game.axis_y_label_high}
-                          selfPosition={null}
-                          otherPositions={[]}
-                        />
-                      </div>
-                      <div className="text-[10px] text-secondary text-center px-1 pb-1 truncate">
-                        {new Date(game.created_at).toLocaleDateString()}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+              <div className="flex flex-wrap gap-3">
+                {gamesWithWinners.map(({ game }) => (
+                  <Link
+                    key={game.id}
+                    href={`/play/${game.invite_code}`}
+                    className="flex shrink-0 w-32 flex-col rounded-lg border border-surface-muted bg-surface text-black hover:bg-surface-muted transition-colors overflow-hidden"
+                  >
+                    <div className="w-32 h-32 p-1.5">
+                      <GameGridPreview
+                        axisXLow={game.axis_x_label_low}
+                        axisXHigh={game.axis_x_label_high}
+                        axisYLow={game.axis_y_label_low}
+                        axisYHigh={game.axis_y_label_high}
+                        selfPosition={null}
+                        otherPositions={[]}
+                      />
+                    </div>
+                    <div className="text-[10px] text-secondary text-center px-1 pb-1 truncate">
+                      {new Date(game.created_at).toLocaleDateString()}
+                    </div>
+                  </Link>
+                ))}
               </div>
             </div>
           </section>
@@ -659,7 +634,7 @@ export default function GroupDetailPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {memberFeaturedTags[m.player_id].map((t, i) => (
                           <span key={`${m.player_id}-${t.label}-${i}`} className="inline-flex rounded-full bg-surface-muted/80 border border-surface-muted px-2.5 py-0.5 text-xs text-black">
-                            {t.label} {t.agreement_pct}%
+                            {t.agreement_pct}% {t.label}
                           </span>
                         ))}
                       </div>

@@ -40,16 +40,16 @@ export function buildStaticNotificationPart(kind: NotificationKind, context: Gam
   let lines: string[] = [];
   switch (kind) {
     case "new_game_invite":
-      lines = [`You're in a new Friend Place game. Axes: ${axes}.`];
+      lines = [`You're in a new FriendPlace game. Axes: ${axes}.`];
       break;
     case "mid_game_nudge":
       lines = [`${context.submittedCount} of ${context.totalCount} have submitted. Axes: ${axes}.`];
       break;
     case "results_reminder":
-      lines = [`Your Friend Place game has results. Axes: ${axes}.`];
+      lines = [`Your FriendPlace game has results. Axes: ${axes}.`];
       break;
     default:
-      lines = [`Friend Place. Axes: ${axes}.`];
+      lines = [`FriendPlace. Axes: ${axes}.`];
   }
   if (link) {
     lines.push("", `Play: ${link}`);
@@ -85,7 +85,7 @@ async function generateQuip(kind: NotificationKind, context: GameContext): Promi
     return null;
   }
 
-  const systemPrompt = `You write one short, punchy sentence (a "quip" or tease) for a casual web game called Friend Place. No hashtags or marketing speak. Never reveal placements, scores, rankings, or where anyone was placed—only create curiosity. Output ONLY that one sentence, nothing else. Do not repeat axis names or game info; the user already gets that in a separate line.`;
+  const systemPrompt = `You write one short, punchy sentence (a "quip" or tease) for a casual web game called FriendPlace. No hashtags or marketing speak. Never reveal placements, scores, rankings, or where anyone was placed—only create curiosity. Output ONLY that one sentence, nothing else. Do not repeat axis names or game info; the user already gets that in a separate line.`;
 
   let userPrompt: string;
   switch (kind) {

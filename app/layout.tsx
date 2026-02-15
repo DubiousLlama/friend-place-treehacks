@@ -20,7 +20,7 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Friend Place",
+  title: "FriendPlace",
   description: "Place your friends on alignment charts. Think Wordle meets Wavelength.",
 };
 

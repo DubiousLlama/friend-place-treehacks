@@ -7,11 +7,11 @@ import { NextResponse } from "next/server";
  * POST /api/notifications/test
  * Body: { "to": "your@email.com" }
  *
- * Requires in .env.local: RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "Friend Place <onboarding@resend.dev>")
+ * Requires in .env.local: RESEND_API_KEY, RESEND_FROM_EMAIL (e.g. "FriendPlace <onboarding@resend.dev>")
  */
 export async function POST(req: Request) {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "Friend Place <onboarding@resend.dev>";
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "FriendPlace <onboarding@resend.dev>";
 
   if (!apiKey) {
     return NextResponse.json(
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         from: fromEmail,
         to: [to],
-        subject: "Friend Place: test email",
+        subject: "FriendPlace: test email",
         text: "This is a test from your local notification setup. Resend is working.",
       }),
     });
