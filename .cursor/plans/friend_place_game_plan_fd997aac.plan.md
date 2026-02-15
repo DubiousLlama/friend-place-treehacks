@@ -402,7 +402,7 @@ The build is broken into 6 phases, each producing a working increment:
 - Scoreboard with rankings
 - Animated reveal: show where each player placed themselves, then show where others guessed
 - Visual comparison (lines from guess to actual position, color-coded by accuracy)
-- `AccountPrompt` component: prompt users to link their anonymous account to email/OAuth (via `supabase.auth.updateUser()` or `linkIdentity()`) so they can save score history and easily recreate game groups
+- `AccountPrompt` component: prompt users to link their anonymous account to email or Google. Opens `AuthModal`: ?Continue with Google? or email form. Sign-up: email + Create password + Confirm password (required, must match), ?Create account? button; toggle ?Don?t have an account? Create one.? Sign-in: email + password, ?Sign in.? Uses `signUp()` / `signInWithPassword()` for email and `signInWithOAuth()` for Google. Merge flow (see `docs/account-testing-and-debugging.md`) moves anonymous game data into the linked account.
 - **Account security & privacy:** Auth callback sanitizes `next` (no open redirect). Merge API validates `fromUserId` as UUID and allows only anonymous identities (see `docs/security-and-privacy.md`).
 
 ### Phase 6: Polish + Deploy

@@ -124,6 +124,30 @@ Shown when a user first opens a game link and hasn't claimed a name. Displays:
 
 ---
 
+## Account / Auth components
+
+### `AuthModal` (`components/AuthModal.tsx`)
+
+Modal for sign-in and sign-up. Shown from `AccountPrompt` (e.g. on results screen) or anywhere that needs auth.
+
+- **Continue with Google** — OAuth redirect; merge key set before redirect so anonymous data can be merged after.
+- **Email form:** Sign-in mode: email, Password, “Sign in” button. Sign-up mode: email, **Create password**, **Confirm password** (validated to match), “Create account” button. Toggle link: “Don’t have an account? Create one.” / “Sign in instead.” Password is required for new accounts.
+- **Props:** `onClose`, `onSuccess?`, `isLinking?` (when true, copy emphasizes saving progress).
+
+### `AccountPrompt` (`components/AccountPrompt.tsx`)
+
+Card shown on the results screen (and optionally elsewhere) prompting users to save progress. “Sign in” opens `AuthModal` with `isLinking`; “Maybe later” calls `onDismiss` if provided.
+
+### `AuthMergeChecker` (`components/AuthMergeChecker.tsx`)
+
+Renders nothing visibly. On mount: if the current user is linked (not anonymous) and `localStorage` has `fp-pending-merge-anon-uid`, shows `MergeDataModal`. User can merge (POST `/api/account/merge`) or dismiss; either way the key is cleared. See `docs/account-testing-and-debugging.md` for the merge flow.
+
+### `MergeDataModal` (`components/MergeDataModal.tsx`)
+
+Modal asking whether to merge anonymous progress from this device into the current account. Confirm → calls merge API and reloads; Dismiss → clears the pending key.
+
+---
+
 ## Library Modules
 
 ### `lib/game-types.ts`

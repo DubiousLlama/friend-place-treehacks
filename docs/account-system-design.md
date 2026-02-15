@@ -44,13 +44,12 @@ The app can stay **fully playable without an account**; these are reasons to *op
 - Redirect to Google → back to app; same `auth.uid()`, now with a linked identity.
 - No extra tables; `auth.users` gains the identity.
 
-**Option B — Link email (and optional password)**
+**Option B — Link email (required password)**
 
-- User enters email → `supabase.auth.updateUser({ email })`.
-- Supabase sends verification; after verification the anonymous user is “identified.”
-- Optionally later: `updateUser({ password })` so they can sign in with email/password on another device.
+- User signs up with email + password via `signUp({ email, password })`. Password is **required**; we also collect “Create password” and “Confirm password” and validate they match before submitting. Supabase sends a verification email; after the user clicks the link they are identified.
+- Existing users sign in with `signInWithPassword({ email, password })`.
 
-**Recommendation:** Offer both: “Continue with Google” and “Continue with email.” Keep email optional if you want minimal friction (e.g. “Enter email to save progress” without requiring password initially).
+**Recommendation:** Offer both: “Continue with Google” and “Continue with email.” Email sign-up uses required password plus confirm-password validation for security.
 
 **Config:** In Supabase Dashboard → Auth → Providers, enable Anonymous sign-in and “Confirm email” (and any OAuth providers). For linking, ensure [manual linking](https://supabase.com/docs/guides/auth/auth-identity-linking) is enabled as needed.
 
@@ -115,17 +114,17 @@ No schema change required; just UX: “Use [X] as your name in new games?” and
 
 Avoid prompting before they’ve played or mid-game; keep the first experience frictionless.
 
-### 6.2 AccountPrompt component (Phase 5)
+### 6.2 AccountPrompt and AuthModal (Phase 5)
 
 - **Copy:** Emphasize benefits: score history, same group again, play from any device.
-- **Actions:** “Continue with Google”, “Continue with email”.
+- **Actions:** “Continue with Google”, or email form with “Don’t have an account? Create one.” (toggles to sign-up). Sign-up: email, **Create password**, **Confirm password** (must match), **Create account** button. Sign-in: email, **Password**, **Sign in** button.
 - **After link:** Short confirmation (“You’re all set. Your games are saved.”) and optionally redirect to a “My games” view or back to the same results page with prompt dismissed.
 
 Dismissal: store in `localStorage` or in DB (“user dismissed account prompt at …”) so you don’t nag every time; still show “My games” / “Sign in” in header when they have no linked account.
 
 ### 6.3 Signed-in experience
 
-- **Header / nav:** If `user` has linked identity: “My games”, maybe “Saved groups”, profile (display name + sign out). If anonymous: no “My games”, or show “Sign in to save games.”
+- **Header / nav:** If `user` has linked identity: “My games”, “Profile”, **account icon** (links to account page), email label, sign out. If anonymous: no “My games”, or show “Sign in to save games.”
 - **Home `/`:** If signed in, show “My games” list and “Create game”; optionally “Start from saved group.” If anonymous, current flow: just “Create game.”
 
 ---
@@ -134,7 +133,7 @@ Dismissal: store in `localStorage` or in DB (“user dismissed account prompt at
 
 | Step | What | Depends on |
 |------|------|------------|
-| 1 | **AccountPrompt on results** | Phase 5 results UI. Use `linkIdentity({ provider: 'google' })` and `updateUser({ email })` + verification. |
+| 1 | **AccountPrompt on results** | Phase 5 results UI. Use `linkIdentity({ provider: 'google' })` and sign up / sign in with email + verification. |
 | 2 | **Detect “has account”** | Check `user` identities/email in client; optionally set `players.linked_at` via trigger or API. |
 | 3 | **“My games” page** | Query games by `created_by` and by `game_players.player_id`; RLS already allows this. |
 | 4 | **Default display name** | Use `players.display_name` when creating/claiming; add one-time “Use this name in new games?” after link. |
@@ -158,7 +157,7 @@ Security and privacy for login, callback, and merge are documented in [Security 
 
 ## 9. Summary
 
-- **Account = linked Supabase identity** (email or OAuth); same `auth.uid()`, so no data migration.
+- **Account = linked Supabase identity** (email or OAuth); same `auth.uid()`, so no data migration. For future reminder texts, `lib/sms/` provides a swappable SMS provider (e.g. Twilio).
 - **Anonymous-first** stays; account is optional and prompted after results (and optionally elsewhere).
 - **First deliverables:** AccountPrompt (Phase 5), then “My games” and optional default display name.
 - **Later:** Saved groups and “play again with same crew” for a sticky, recurring experience.

@@ -6,9 +6,26 @@ This document describes security and privacy measures for the Friend Place accou
 
 ## 1. Login and verification
 
-- **Auth provider:** Supabase Auth handles all credentials; the app never stores passwords. Email/password and OAuth (e.g. Google) use Supabase’s built-in flows.
-- **Session:** Supabase SSR stores the session in cookies; middleware refreshes it. Sensitive tokens are not stored in application localStorage (Supabase’s own client may use localStorage for session; we use cookie-based SSR where possible).
-- **Callback redirect:** The `/auth/callback` route only redirects to **relative paths**. The `next` query param is sanitized: it must start with a single `/` and must not contain `//` or `\`, preventing open-redirect to external sites.
+### 1.1 Email/password flow
+
+- The user submits email and password only to **Supabase Auth** (via `signInWithPassword` or `signUp`). The request goes from the browser to Supabase’s auth endpoints; the app server does not receive or log the password.
+- Supabase verifies credentials (or creates the user on sign-up) and returns a **session**: a short-lived **access token** (JWT) and a **refresh token**. The password is never returned or stored by our app.
+- For **sign-up**, Supabase can require email confirmation; the user clicks a link in email to verify, then signs in with the same credentials. We use `emailRedirectTo` so the confirmation link lands on our `/auth/callback`.
+
+### 1.2 OAuth (e.g. Google)
+
+- User chooses “Continue with Google”; the request goes to Supabase then to the provider. We use `redirectTo` so the callback lands on our `/auth/callback`. Session handling is the same as below.
+
+### 1.3 How the valid session is stored
+
+- We use **`@supabase/ssr`**: both the **browser client** (`createBrowserClient` in `lib/supabase/client.ts`) and the **server client** (`createServerClient` in `lib/supabase/server.ts`) are configured to use **cookies** for the session.
+- The Supabase SSR package stores the session in **HTTP-only-capable cookies** (chunked if needed to stay under size limits). That way the same session is available to Server Components, Route Handlers, and middleware without sending tokens to the client in application code.
+- On every request, **middleware** (`lib/supabase/middleware.ts`) runs: it creates a server client that reads cookies from the request, calls `getUser()`, and if the access token is expired Supabase uses the refresh token to get a new one; the middleware then writes the updated cookies onto the response. So the “valid session” is whatever is in those cookies after refresh.
+- We do **not** store the session in `localStorage` in our app code. Using cookies (via `@supabase/ssr`) keeps the session usable on the server and avoids exposing tokens in client-side storage that our code touches.
+
+### 1.4 Callback redirect
+
+- The `/auth/callback` route only redirects to **relative paths**. The `next` query param is sanitized: it must start with a single `/` and must not contain `//` or `\`, preventing open-redirect to external sites.
 
 ---
 

@@ -5,11 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import type { Database } from "@/lib/types/database";
-
-type Game = Database["public"]["Tables"]["games"]["Row"];
-type GamePlayer = Database["public"]["Tables"]["game_players"]["Row"];
-type Guess = Database["public"]["Tables"]["guesses"]["Row"];
 
 interface ConsensusResult {
   gameId: string;
@@ -23,6 +18,25 @@ interface ConsensusResult {
   meanGuessY: number;
 }
 
+interface GameRankEntry {
+  gameId: string;
+  inviteCode: string;
+  axesLabel: string;
+  createdAt: string;
+  myRank: number;
+  totalPlayers: number;
+}
+
+function getRankSuffix(n: number): string {
+  if (n >= 11 && n <= 13) return "th";
+  switch (n % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
+  }
+}
+
 function variance(values: number[]): number {
   if (values.length < 2) return 0;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
@@ -34,6 +48,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [consensusHighlights, setConsensusHighlights] = useState<ConsensusResult[]>([]);
+  const [scoreHistory, setScoreHistory] = useState<GameRankEntry[]>([]);
   const [gamesCount, setGamesCount] = useState(0);
   const [bestRank, setBestRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,13 +78,15 @@ export default function ProfilePage() {
       const gameIds = [...new Set((mySlots ?? []).map((s) => s.game_id))];
       const { data: gamesData } = await supabase
         .from("games")
-        .select("id, invite_code, phase, axis_x_label_low, axis_x_label_high, axis_y_label_low, axis_y_label_high")
+        .select("id, invite_code, phase, created_at, axis_x_label_low, axis_x_label_high, axis_y_label_low, axis_y_label_high")
         .in("id", gameIds)
-        .eq("phase", "results");
+        .eq("phase", "results")
+        .order("created_at", { ascending: false });
 
       const gamesMap = new Map((gamesData ?? []).map((g) => [g.id, g]));
       let bestRankSoFar: number | null = null;
       const consensusList: ConsensusResult[] = [];
+      const rankHistoryList: GameRankEntry[] = [];
 
       for (const slot of mySlots ?? []) {
         const game = gamesMap.get(slot.game_id);
@@ -91,6 +108,14 @@ export default function ProfilePage() {
         if (myIdx >= 0) {
           const rank = myIdx + 1;
           if (bestRankSoFar === null || rank < bestRankSoFar) bestRankSoFar = rank;
+          rankHistoryList.push({
+            gameId: game.id,
+            inviteCode: game.invite_code,
+            axesLabel: `${game.axis_x_label_low}–${game.axis_x_label_high} / ${game.axis_y_label_low}–${game.axis_y_label_high}`,
+            createdAt: game.created_at,
+            myRank: rank,
+            totalPlayers: sorted.length,
+          });
         }
 
         if ((guessesForMe?.length ?? 0) >= 2) {
@@ -117,6 +142,12 @@ export default function ProfilePage() {
 
       consensusList.sort((a, b) => a.variance - b.variance);
       setConsensusHighlights(consensusList.slice(0, 5));
+      // Dedupe by game and sort by date (newest first)
+      const byGame = new Map(rankHistoryList.map((r) => [r.gameId, r]));
+      const sorted = Array.from(byGame.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setScoreHistory(sorted.slice(0, 10));
       setGamesCount(gameIds.length);
       setBestRank(bestRankSoFar);
       setLoading(false);
@@ -149,7 +180,7 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen px-4 py-8">
       <h1 className="font-display text-2xl font-bold text-foreground">
-        Profile
+        Account
       </h1>
       <p className="mt-1 text-sm text-secondary">
         {displayName ?? user.email ?? "Signed in"}
@@ -161,21 +192,56 @@ export default function ProfilePage() {
         <div className="mt-8 space-y-8">
           <section>
             <h2 className="font-display text-lg font-semibold text-foreground">
-              Stats
+              Score history
             </h2>
-            <ul className="mt-2 space-y-1 text-sm text-secondary">
-              <li>Games played (finished): {gamesCount}</li>
-              {bestRank != null && (
-                <li>Best rank: {bestRank === 1 ? "1st" : bestRank === 2 ? "2nd" : bestRank === 3 ? "3rd" : `${bestRank}th`}</li>
-              )}
-            </ul>
+            <p className="mt-1 text-sm text-secondary">
+              View your games by rank (no scores). See how you placed in each finished game.
+            </p>
+            {scoreHistory.length === 0 ? (
+              <p className="mt-4 text-sm text-secondary">
+                No finished games yet. Play a game and come back after it ends!
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-2">
+                {scoreHistory.slice(0, 5).map((entry) => (
+                  <li key={entry.gameId}>
+                    <Link
+                      href={`/play/${entry.inviteCode}`}
+                      className="block rounded-xl border border-border bg-surface p-3 hover:bg-muted/50"
+                    >
+                      <div className="text-sm font-medium text-foreground">
+                        {entry.axesLabel}
+                      </div>
+                      <div className="mt-1 text-xs text-secondary">
+                        You placed {entry.myRank}
+                        {getRankSuffix(entry.myRank)} of {entry.totalPlayers} ·{" "}
+                        {new Date(entry.createdAt).toLocaleDateString()}
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link
+              href="/games"
+              className="mt-3 inline-block text-sm font-medium text-splash hover:underline"
+            >
+              View all games →
+            </Link>
           </section>
 
           <section>
             <h2 className="font-display text-lg font-semibold text-foreground">
-              Extreme consensus
+              Profile records
             </h2>
             <p className="mt-1 text-sm text-secondary">
+              Interesting results from your games—e.g. where your friends had strong consensus about you.
+            </p>
+
+            <h3 className="mt-4 font-display text-sm font-semibold text-foreground">
+              Extreme consensus
+            </h3>
+            <p className="mt-0.5 text-sm text-secondary">
               Games where your friends agreed most about where you’d place yourself (low variance in their guesses).
             </p>
             {consensusHighlights.length === 0 ? (
@@ -201,6 +267,9 @@ export default function ProfilePage() {
                 ))}
               </ul>
             )}
+            <p className="mt-4 text-xs text-secondary italic">
+              More profile record types (e.g. biggest surprises, trends) can be added here later.
+            </p>
           </section>
         </div>
       )}

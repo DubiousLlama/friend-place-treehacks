@@ -15,6 +15,7 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
@@ -54,9 +55,19 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
     await setPendingMergeIfAnonymous();
 
     if (mode === "signup") {
+      if (!password.trim()) {
+        setMessage({ type: "error", text: "Please enter a password." });
+        setLoading(false);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setMessage({ type: "error", text: "Passwords don't match." });
+        setLoading(false);
+        return;
+      }
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
-        password: password || undefined,
+        password: password.trim(),
         options: { emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback` },
       });
       if (error) {
@@ -132,12 +143,24 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
           />
           <input
             type="password"
-            placeholder={mode === "signup" ? "Password (optional)" : "Password"}
+            placeholder={mode === "signup" ? "Create password" : "Password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-secondary"
-            required={mode === "signin"}
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            required
           />
+          {mode === "signup" && (
+            <input
+              type="password"
+              placeholder="Confirm password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-secondary"
+              autoComplete="new-password"
+              required
+            />
+          )}
           {message && (
             <p
               className={`text-sm ${message.type === "error" ? "text-red-600" : "text-green-600"}`}
@@ -146,23 +169,24 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
             </p>
           )}
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setMode(mode === "signin" ? "signup" : "signin");
-                setMessage(null);
-              }}
-              className="text-sm text-splash hover:underline"
-            >
-              {mode === "signin" ? "Create account" : "Sign in instead"}
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="ml-auto rounded-lg bg-splash px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-            >
-              {loading ? "…" : mode === "signin" ? "Sign in" : "Sign up"}
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === "signin" ? "signup" : "signin");
+                  setMessage(null);
+                  setConfirmPassword("");
+                }}
+                className="text-sm text-splash hover:underline"
+              >
+                {mode === "signin" ? "Don't have an account? Create one." : "Sign in instead"}
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="ml-auto rounded-lg bg-splash px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {loading ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+              </button>
           </div>
         </form>
       </div>
