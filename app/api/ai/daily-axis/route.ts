@@ -39,10 +39,16 @@ export async function GET(request: NextRequest) {
   const groupId = searchParams.get("group_id") ?? undefined;
 
   try {
-    const supabase = createAdminClient();
-
     // Group path: always generate new axes for this game (never use global daily cache)
     if (groupId) {
+      let supabase;
+      try {
+        supabase = createAdminClient();
+      } catch (adminErr) {
+        console.error("[daily-axis] createAdminClient failed (missing SUPABASE_SERVICE_ROLE_KEY?):", adminErr);
+        const fb = randomFallback();
+        return NextResponse.json({ ...fb, source: "fallback" });
+      }
       const { data: group, error: groupError } = await supabase
         .from("saved_groups")
         .select("interests")
@@ -76,6 +82,8 @@ export async function GET(request: NextRequest) {
       const fb = randomFallback();
       return NextResponse.json({ ...fb, source: "fallback" });
     }
+
+    const supabase = createAdminClient();
 
     // Check if today's axis already exists (use maybeSingle so 0 rows is not an error)
     const { data: existing, error: selectError } = await supabase

@@ -109,9 +109,15 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
       .then(({ data }) => setSavedGroups((data as SavedGroup[]) ?? []));
   }, [isLinked, user]);
 
+  // Keep selectedGroupId in sync with initialGroupId (e.g. from /create?group=id) so axes fetch runs
+  useEffect(() => {
+    if (initialGroupId != null) {
+      setSelectedGroupId(initialGroupId);
+    }
+  }, [initialGroupId]);
+
   useEffect(() => {
     if (!initialGroupId || !user) return;
-    setSelectedGroupId(initialGroupId);
     const supabase = createClient();
     supabase
       .from("saved_groups")
@@ -207,9 +213,12 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
     );
   }, []);
 
+  // Resolve group id for axes: use selected group or initial (from URL) so we fetch group axes when opening /create?group=id
+  const groupIdForAxes = selectedGroupId ?? initialGroupId ?? null;
+
   useEffect(() => {
     setRegensLeft(MAX_REGENS - getRegensUsedToday());
-    if (!selectedGroupId && initialDailyAxes?.x_low != null && initialDailyAxes?.x_high != null && initialDailyAxes?.y_low != null && initialDailyAxes?.y_high != null) {
+    if (!groupIdForAxes && initialDailyAxes?.x_low != null && initialDailyAxes?.x_high != null && initialDailyAxes?.y_low != null && initialDailyAxes?.y_high != null) {
       appliedParentAxesRef.current = true;
       setDailyAxes(initialDailyAxes);
       setXLow(initialDailyAxes.x_low);
@@ -220,22 +229,22 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
       return;
     }
     appliedParentAxesRef.current = false;
-    const url = selectedGroupId
-      ? `/api/ai/daily-axis?group_id=${encodeURIComponent(selectedGroupId)}`
+    const url = groupIdForAxes
+      ? `/api/ai/daily-axis?group_id=${encodeURIComponent(groupIdForAxes)}`
       : "/api/ai/daily-axis";
     fetch(url)
       .then((res) => res.json())
       .then((data: AxisSuggestion & { source?: string }) => {
         if (appliedParentAxesRef.current) return;
         setDailyAxes(data);
-        setXLow(data.x_low);
-        setXHigh(data.x_high);
-        setYLow(data.y_low);
-        setYHigh(data.y_high);
+        setXLow(data.x_low ?? "");
+        setXHigh(data.x_high ?? "");
+        setYLow(data.y_low ?? "");
+        setYHigh(data.y_high ?? "");
       })
       .catch(() => {})
       .finally(() => setLoadingAxes(false));
-  }, [selectedGroupId, initialDailyAxes]);
+  }, [groupIdForAxes, initialDailyAxes]);
 
   const handleRegenerateAxis = useCallback(
     async (axis: "horizontal" | "vertical") => {
@@ -573,8 +582,8 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
             <div className="flex flex-col gap-4 min-w-0">
               <p className="text-sm text-secondary">
                 {loadingAxes
-                  ? (selectedGroupId ? "Generating axes for this game…" : "Loading today's axes…")
-                  : (selectedGroupId ? "Axes for this game – edit or use the reload next to each axis." : "Today's axes – edit or use the reload next to each axis.")}
+                  ? (groupIdForAxes ? "Generating axes for this game…" : "Loading today's axes…")
+                  : (groupIdForAxes ? "Axes for this game – edit or use the reload next to each axis." : "Today's axes – edit or use the reload next to each axis.")}
               </p>
               <fieldset className="flex flex-col gap-2 min-w-0">
                 <div className="flex items-center gap-2">
