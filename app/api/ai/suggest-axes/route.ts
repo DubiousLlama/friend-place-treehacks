@@ -57,16 +57,14 @@ export async function POST(request: NextRequest) {
 
     const deviceKey = getDeviceKey(request);
     let usage: Awaited<ReturnType<typeof getOrCreateDailyUsage>>;
+    let usageTracked = true;
     try {
       usage = await getOrCreateDailyUsage(deviceKey, request);
     } catch (usageErr) {
       const msg = usageErr instanceof Error ? usageErr.message : String(usageErr);
       console.error("[suggest-axes] getOrCreateDailyUsage failed:", msg);
-      return json500(
-        "Failed to generate axes. Try again or enter your own!",
-        isDev ? msg : undefined,
-        "usage",
-      );
+      usage = { axes_count: 0, invite_count: 0 };
+      usageTracked = false;
     }
     if (usage.axes_count >= DAILY_AXES_LIMIT) {
       return NextResponse.json(
@@ -129,7 +127,13 @@ export async function POST(request: NextRequest) {
         console.error("[suggest-axes] horizontal response missing fields:", result);
         return json500("Failed to generate horizontal axes", JSON.stringify(result), "parse");
       }
-      if (!hasGroupInterests) await incrementAxesUsed(deviceKey);
+      if (usageTracked && !hasGroupInterests) {
+        try {
+          await incrementAxesUsed(deviceKey);
+        } catch {
+          // ignore when device usage DB isn't available (e.g. prod without service role key)
+        }
+      }
       return NextResponse.json({ x_low: xLow, x_high: xHigh });
     }
 
@@ -148,7 +152,13 @@ export async function POST(request: NextRequest) {
       console.error("[suggest-axes] vertical response missing fields:", result);
       return json500("Failed to generate vertical axes", JSON.stringify(result), "parse");
     }
-    if (!hasGroupInterests) await incrementAxesUsed(deviceKey);
+    if (usageTracked && !hasGroupInterests) {
+      try {
+        await incrementAxesUsed(deviceKey);
+      } catch {
+        // ignore when device usage DB isn't available (e.g. prod without service role key)
+      }
+    }
     return NextResponse.json({ y_low: yLow, y_high: yHigh });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
