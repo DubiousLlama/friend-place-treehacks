@@ -137,8 +137,8 @@ export default function PlayPage() {
 
     const deadline = new Date(game.submissions_lock_at);
     if (deadline <= new Date()) {
-      supabase.rpc("check_and_end_game", { p_game_id: game.id }).catch(() => {
-        // Non-critical — user can reload
+      supabase.rpc("check_and_end_game", { p_game_id: game.id }).then(() => {
+        // Non-critical — Realtime will catch phase changes
       });
     }
   }, [game?.id, game?.phase, game?.submissions_lock_at, supabase]);
