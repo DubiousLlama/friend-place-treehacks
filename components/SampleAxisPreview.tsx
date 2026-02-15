@@ -51,7 +51,7 @@ export function SampleAxisPreview({
   }, [placementSizes]);
 
   return (
-    <div className="relative w-full max-w-[280px] aspect-square mx-auto overflow-hidden">
+    <div className="relative w-full max-w-[280px] md:max-w-[360px] aspect-square mx-auto overflow-hidden">
       <GameGraph
         axisXLow={axisXLow}
         axisXHigh={axisXHigh}

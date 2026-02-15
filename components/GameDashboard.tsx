@@ -76,8 +76,8 @@ export function GameDashboard({
   const handleShare = useCallback(async () => {
     if (!shareUrl) return;
     const result = await shareOrCopy(shareUrl);
-    if (result === "shared" || result === "copied") {
-      setShareStatus(result);
+    if (result === "shared") {
+      setShareStatus("shared");
       setTimeout(() => setShareStatus("idle"), 2000);
     }
   }, [shareUrl]);
@@ -315,11 +315,7 @@ export function GameDashboard({
               <polyline points="16 6 12 2 8 6" />
               <line x1="12" y1="2" x2="12" y2="15" />
             </svg>
-            {shareStatus === "copied"
-              ? "Link copied!"
-              : shareStatus === "shared"
-                ? "Shared!"
-                : "Share invite"}
+            {shareStatus === "shared" ? "Shared!" : "Share invite"}
           </button>
         </div>
 

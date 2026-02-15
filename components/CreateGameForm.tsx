@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generateInviteCode } from "@/lib/utils";
@@ -51,9 +51,11 @@ type FriendRow = {
 export interface CreateGameFormProps {
   /** When creating a game from a group page, pass the group id to pre-select it and pre-fill members. */
   initialGroupId?: string;
+  /** When provided (e.g. from home page), use these as the initial axes so they match "today's axes" and avoid a second fetch. */
+  initialDailyAxes?: AxisSuggestion | null;
 }
 
-export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
+export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameFormProps = {}) {
   const router = useRouter();
   const { user, isLinked } = useAuth();
   const [creating, setCreating] = useState(false);
@@ -61,6 +63,7 @@ export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
   const [savedGroups, setSavedGroups] = useState<SavedGroup[]>([]);
   const [initialGroup, setInitialGroup] = useState<SavedGroup | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(initialGroupId ?? null);
+  const [selectedGroupInterests, setSelectedGroupInterests] = useState<string[]>([]);
 
   const [xLow, setXLow] = useState("");
   const [xHigh, setXHigh] = useState("");
@@ -74,6 +77,7 @@ export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
   const [lastHorizontalPair, setLastHorizontalPair] = useState<{ low: string; high: string } | null>(null);
   const [lastVerticalPair, setLastVerticalPair] = useState<{ low: string; high: string } | null>(null);
   const [pastGameAxes, setPastGameAxes] = useState<string[]>([]);
+  const appliedParentAxesRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -110,13 +114,40 @@ export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
     const supabase = createClient();
     supabase
       .from("saved_groups")
-      .select("id, name")
+      .select("id, name, interests")
       .eq("id", initialGroupId)
       .single()
       .then(({ data }) => {
-        if (data) setInitialGroup(data as SavedGroup);
+        if (data) {
+          const g = data as SavedGroup;
+          setInitialGroup(g);
+          setSelectedGroupInterests(g.interests ?? []);
+        }
       });
   }, [initialGroupId, user]);
+
+  useEffect(() => {
+    if (!selectedGroupId) {
+      setSelectedGroupInterests([]);
+      return;
+    }
+    if (initialGroup?.id === selectedGroupId) {
+      setSelectedGroupInterests(initialGroup.interests ?? []);
+      return;
+    }
+    if (initialGroupId === selectedGroupId) {
+      return;
+    }
+    const supabase = createClient();
+    supabase
+      .from("saved_groups")
+      .select("interests")
+      .eq("id", selectedGroupId)
+      .single()
+      .then(({ data }) => {
+        setSelectedGroupInterests((data as { interests?: string[] } | null)?.interests ?? []);
+      });
+  }, [selectedGroupId, initialGroupId, initialGroup?.id, initialGroup?.interests]);
 
   const [friendRows, setFriendRows] = useState<FriendRow[]>([{ id: "f0", value: "" }]);
 
@@ -177,9 +208,24 @@ export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
 
   useEffect(() => {
     setRegensLeft(MAX_REGENS - getRegensUsedToday());
-    fetch("/api/ai/daily-axis")
+    if (!selectedGroupId && initialDailyAxes?.x_low != null && initialDailyAxes?.x_high != null && initialDailyAxes?.y_low != null && initialDailyAxes?.y_high != null) {
+      appliedParentAxesRef.current = true;
+      setDailyAxes(initialDailyAxes);
+      setXLow(initialDailyAxes.x_low);
+      setXHigh(initialDailyAxes.x_high);
+      setYLow(initialDailyAxes.y_low);
+      setYHigh(initialDailyAxes.y_high);
+      setLoadingAxes(false);
+      return;
+    }
+    appliedParentAxesRef.current = false;
+    const url = selectedGroupId
+      ? `/api/ai/daily-axis?group_id=${encodeURIComponent(selectedGroupId)}`
+      : "/api/ai/daily-axis";
+    fetch(url)
       .then((res) => res.json())
       .then((data: AxisSuggestion & { source?: string }) => {
+        if (appliedParentAxesRef.current) return;
         setDailyAxes(data);
         setXLow(data.x_low);
         setXHigh(data.x_high);
@@ -188,7 +234,7 @@ export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
       })
       .catch(() => {})
       .finally(() => setLoadingAxes(false));
-  }, []);
+  }, [selectedGroupId, initialDailyAxes]);
 
   const handleRegenerateAxis = useCallback(
     async (axis: "horizontal" | "vertical") => {
@@ -206,6 +252,7 @@ export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
             dailyAxes,
             previousPair: previousPair ?? undefined,
             pastGameAxes: pastGameAxes.length ? pastGameAxes : undefined,
+            groupInterests: selectedGroupInterests.length ? selectedGroupInterests : undefined,
           }),
         });
         const data = await res.json();
@@ -232,7 +279,7 @@ export function CreateGameForm({ initialGroupId }: CreateGameFormProps = {}) {
         setRegeneratingAxis(null);
       }
     },
-    [regensLeft, regeneratingAxis, xLow, xHigh, yLow, yHigh, dailyAxes, lastHorizontalPair, lastVerticalPair, pastGameAxes],
+    [regensLeft, regeneratingAxis, xLow, xHigh, yLow, yHigh, dailyAxes, lastHorizontalPair, lastVerticalPair, pastGameAxes, selectedGroupInterests],
   );
 
   const [creatorName, setCreatorName] = useState("");

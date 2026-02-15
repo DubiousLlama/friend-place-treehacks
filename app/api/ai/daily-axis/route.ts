@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isAIAvailable } from "@/lib/ai/config";
 import { generateText, parseAxisLines } from "@/lib/ai/provider";
 import {
   AXIS_SYSTEM_PROMPT,
   buildDailyAxisPrompt,
+  buildGroupAxesPrompt,
   type AxisSuggestion,
 } from "@/lib/ai/prompts";
 
@@ -30,12 +31,42 @@ function randomFallback(): AxisSuggestion {
  * GET /api/ai/daily-axis
  *
  * Returns today's daily axis. Generates + caches on first request of the day.
+ * Query: group_id — if present and the group has interests, generates axes from group interests (no cache).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const today = getTodayDateString();
+  const { searchParams } = new URL(request.url);
+  const groupId = searchParams.get("group_id") ?? undefined;
 
   try {
     const supabase = createAdminClient();
+
+    // Group path: use interests to generate axes (no global cache)
+    if (groupId) {
+      const { data: group, error: groupError } = await supabase
+        .from("saved_groups")
+        .select("interests")
+        .eq("id", groupId)
+        .maybeSingle();
+
+      if (!groupError && group?.interests?.length) {
+        if (!isAIAvailable()) {
+          const fb = randomFallback();
+          return NextResponse.json({ ...fb, source: "fallback" });
+        }
+        const raw = await generateText(
+          AXIS_SYSTEM_PROMPT,
+          buildGroupAxesPrompt({ groupInterests: group.interests }),
+        );
+        const result = raw ? parseAxisLines(raw, "full") : null;
+        if (result?.x_low && result.x_high && result.y_low && result.y_high) {
+          return NextResponse.json({ ...result, source: "group" });
+        }
+        const fb = randomFallback();
+        return NextResponse.json({ ...fb, source: "fallback" });
+      }
+      // No interests or group not found: fall through to global daily axis
+    }
 
     // Check if today's axis already exists (use maybeSingle so 0 rows is not an error)
     const { data: existing, error: selectError } = await supabase

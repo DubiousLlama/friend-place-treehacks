@@ -36,6 +36,7 @@ function json500(message: string, detail?: string) {
  *   dailyAxes?: AxisSuggestion
  *   previousPair?: { low, high } — last generated pair for this axis (avoid repeat)
  *   pastGameAxes?: string[] — axis pairs from user's past games (e.g. ["Gimli ↔ Legolas | Muffin ↔ Pancake"])
+ *   groupInterests?: string[] — group interests; used for inspiration, same interest not on both axes
  */
 export async function POST(request: NextRequest) {
   if (!isAIAvailable()) {
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
     const dailyAxes = body.dailyAxes as AxisSuggestion | undefined;
     const previousPair = body.previousPair as { low: string; high: string } | undefined;
     const pastGameAxes = body.pastGameAxes as string[] | undefined;
+    const groupInterests = body.groupInterests as string[] | undefined;
 
     if (!currentAxes?.x_low || currentAxes.x_high == null || currentAxes.y_low == null || currentAxes.y_high == null) {
       return NextResponse.json(
@@ -81,6 +83,7 @@ export async function POST(request: NextRequest) {
       dailyAxes: dailyAxes ?? null,
       previousPair: previousPair ?? null,
       pastGameAxes: pastGameAxes?.length ? pastGameAxes : undefined,
+      groupInterests: groupInterests?.length ? groupInterests : undefined,
     });
 
     const raw = await generateText(AXIS_SYSTEM_PROMPT, userPrompt);

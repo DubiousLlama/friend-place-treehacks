@@ -113,6 +113,8 @@ export default function GroupDetailPage() {
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [addMemberSuccess, setAddMemberSuccess] = useState<string | null>(null);
+  const [newInterestInput, setNewInterestInput] = useState("");
+  const [savingInterests, setSavingInterests] = useState(false);
 
   const isOwner = user && group && group.owner_id === user.id;
   const myMember = members.find((m) => m.player_id === user?.id);
@@ -319,6 +321,45 @@ export default function GroupDetailPage() {
     await fetchGroup();
   };
 
+  const currentInterests = group?.interests ?? [];
+
+  const handleAddInterest = async () => {
+    const trimmed = newInterestInput.trim().toLowerCase();
+    if (!group || !trimmed || currentInterests.includes(trimmed)) {
+      setNewInterestInput("");
+      return;
+    }
+    setSavingInterests(true);
+    const next = [...currentInterests, trimmed];
+    const res = await fetch(`/api/groups/${group.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interests: next }),
+    });
+    if (res.ok) {
+      const { group: updated } = await res.json();
+      setGroup((prev) => (prev ? { ...prev, interests: updated.interests } : null));
+      setNewInterestInput("");
+    }
+    setSavingInterests(false);
+  };
+
+  const handleRemoveInterest = async (interest: string) => {
+    if (!group) return;
+    const next = currentInterests.filter((i) => i !== interest);
+    setSavingInterests(true);
+    const res = await fetch(`/api/groups/${group.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interests: next }),
+    });
+    if (res.ok) {
+      const { group: updated } = await res.json();
+      setGroup((prev) => (prev ? { ...prev, interests: updated.interests } : null));
+    }
+    setSavingInterests(false);
+  };
+
   const handleLeave = async () => {
     if (!user || !group) return;
     setLeaving(true);
@@ -443,6 +484,49 @@ export default function GroupDetailPage() {
           {streak > 0 && (
             <p className="text-sm text-splash">{streak}-day streak</p>
           )}
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-black">Group interests</h2>
+            <p className="text-sm text-secondary">Used when creating a new game so axes match what the group likes. Any member can add or remove.</p>
+            <div className="flex flex-wrap gap-2">
+              {currentInterests.map((interest) => (
+                <span
+                  key={interest}
+                  className="inline-flex items-center gap-1 rounded-full bg-splash/15 border border-splash/30 px-3 py-1 text-sm text-black"
+                >
+                  {interest}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveInterest(interest)}
+                    disabled={savingInterests}
+                    className="rounded-full p-0.5 hover:bg-splash/25 text-secondary hover:text-black disabled:opacity-50"
+                    aria-label={`Remove ${interest}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newInterestInput}
+                onChange={(e) => setNewInterestInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddInterest())}
+                placeholder="Add interest (e.g. coffee, hiking)"
+                className="flex-1 rounded-lg border border-surface-muted bg-surface px-3 py-2 text-sm text-black placeholder:text-secondary"
+                disabled={savingInterests}
+              />
+              <button
+                type="button"
+                onClick={handleAddInterest}
+                disabled={savingInterests || !newInterestInput.trim()}
+                className="rounded-lg bg-splash text-white px-4 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+          </section>
 
           <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">

@@ -78,10 +78,10 @@ export async function shareOrCopy(url: string): Promise<"shared" | "copied" | "f
     }
   }
 
-  // Desktop or fallback: copy full invite message (one link) to clipboard
+  // Desktop or fallback: copy only the URL so it can be pasted directly in a browser
   if (typeof navigator !== "undefined" && navigator.clipboard) {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(url);
       return "copied";
     } catch {
       return "failed";

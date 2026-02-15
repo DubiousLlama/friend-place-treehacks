@@ -72,7 +72,7 @@ export default function Home() {
         </button>
 
         <div id="create-game" className="w-full scroll-mt-8">
-          <CreateGameForm />
+          <CreateGameForm initialDailyAxes={dailyAxes} />
         </div>
       </main>
     </div>

@@ -293,6 +293,7 @@ export type Database = {
           anyone_can_add_members: boolean;
           only_admin_can_remove: boolean;
           daily_game_enabled: boolean;
+          interests: string[];
         };
         Insert: {
           id?: string;
@@ -302,6 +303,7 @@ export type Database = {
           anyone_can_add_members?: boolean;
           only_admin_can_remove?: boolean;
           daily_game_enabled?: boolean;
+          interests?: string[];
         };
         Update: {
           id?: string;
@@ -311,6 +313,7 @@ export type Database = {
           anyone_can_add_members?: boolean;
           only_admin_can_remove?: boolean;
           daily_game_enabled?: boolean;
+          interests?: string[];
         };
         Relationships: [
           {
