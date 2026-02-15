@@ -3,6 +3,7 @@ import { Outfit, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AppNav } from "@/components/AppNav";
 import { AuthMergeChecker } from "@/components/AuthMergeChecker";
+import { AuthModalProvider } from "@/lib/auth-modal-context";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -31,11 +32,13 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${dmSans.variable} antialiased flex flex-col h-dvh`}
       >
-        <AppNav />
-        <main className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-          {children}
-        </main>
-        <AuthMergeChecker />
+        <AuthModalProvider>
+          <AppNav />
+          <main className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+            {children}
+          </main>
+          <AuthMergeChecker />
+        </AuthModalProvider>
       </body>
     </html>
   );

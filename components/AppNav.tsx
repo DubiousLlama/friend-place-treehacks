@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/use-auth";
+import { useAuthModal } from "@/lib/auth-modal-context";
 
 function AccountIcon({ className }: { className?: string }) {
   return (
@@ -23,22 +24,23 @@ function AccountIcon({ className }: { className?: string }) {
 }
 
 export function AppNav() {
-  const { user, loading, isLinked } = useAuth();
+  const { loading, isLinked } = useAuth();
+  const { openAuthModal } = useAuthModal();
 
   return (
-    <>
-      <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-surface/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
-        <div className="flex items-center min-w-0 w-1/3 justify-start" />
-        <div className="flex items-center justify-center shrink-0">
-          <Link
-            href="/"
-            className="font-display text-lg font-bold text-foreground no-underline hover:text-splash"
-          >
-            Friend Place
-          </Link>
-        </div>
-        <div className="flex items-center gap-2 min-w-0 w-1/3 justify-end">
-          {!loading && user && isLinked && (
+    <nav className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-surface/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+      <div className="flex items-center min-w-0 w-1/3 justify-start" />
+      <div className="flex items-center justify-center shrink-0">
+        <Link
+          href="/"
+          className="font-display text-lg font-bold text-foreground no-underline hover:text-splash"
+        >
+          Friend Place
+        </Link>
+      </div>
+      <div className="flex items-center gap-2 min-w-0 w-1/3 justify-end">
+        {!loading && (
+          isLinked ? (
             <Link
               href="/profile"
               className="flex items-center gap-1.5 rounded p-1.5 text-secondary hover:bg-muted hover:text-foreground"
@@ -47,9 +49,19 @@ export function AppNav() {
             >
               <AccountIcon className="h-5 w-5" />
             </Link>
-          )}
-        </div>
-      </nav>
-    </>
+          ) : (
+            <button
+              type="button"
+              onClick={openAuthModal}
+              className="flex items-center gap-1.5 rounded p-1.5 text-secondary hover:bg-muted hover:text-foreground"
+              title="Sign in"
+              aria-label="Sign in"
+            >
+              <AccountIcon className="h-5 w-5" />
+            </button>
+          )
+        )}
+      </div>
+    </nav>
   );
 }

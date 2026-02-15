@@ -33,8 +33,8 @@ function isMobileSharePreferred(): boolean {
 }
 
 /**
- * On phone OSes: use the native Web Share API when available.
- * On desktop (including Chromium): always copy the link to clipboard.
+ * On phone OSes: use the native Web Share API when available (text only to avoid duplicate link).
+ * On desktop (including Chromium): copy the invite message + link to clipboard (link appears once).
  * Returns "shared" | "copied" | "failed".
  */
 export async function shareOrCopy(url: string): Promise<"shared" | "copied" | "failed"> {
@@ -47,7 +47,8 @@ export async function shareOrCopy(url: string): Promise<"shared" | "copied" | "f
     isMobileSharePreferred()
   ) {
     try {
-      await navigator.share({ title, text, url });
+      // Pass only title and text so the link appears once (text already contains the url)
+      await navigator.share({ title, text });
       return "shared";
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -57,10 +58,10 @@ export async function shareOrCopy(url: string): Promise<"shared" | "copied" | "f
     }
   }
 
-  // Desktop or fallback: copy link to clipboard
+  // Desktop or fallback: copy full invite message (one link) to clipboard
   if (typeof navigator !== "undefined" && navigator.clipboard) {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(text);
       return "copied";
     } catch {
       return "failed";
