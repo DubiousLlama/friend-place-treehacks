@@ -229,10 +229,29 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
       return;
     }
     appliedParentAxesRef.current = false;
-    const url = groupIdForAxes
-      ? `/api/ai/daily-axis?group_id=${encodeURIComponent(groupIdForAxes)}`
-      : "/api/ai/daily-axis";
-    fetch(url)
+
+    if (groupIdForAxes) {
+      // Group game: client sends interests (from its own RLS fetch). No service role needed.
+      fetch("/api/ai/suggest-group-axes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupInterests: selectedGroupInterests }),
+      })
+        .then((res) => res.json())
+        .then((data: AxisSuggestion & { source?: string }) => {
+          if (appliedParentAxesRef.current) return;
+          setDailyAxes(data);
+          setXLow(data.x_low ?? "");
+          setXHigh(data.x_high ?? "");
+          setYLow(data.y_low ?? "");
+          setYHigh(data.y_high ?? "");
+        })
+        .catch(() => {})
+        .finally(() => setLoadingAxes(false));
+      return;
+    }
+
+    fetch("/api/ai/daily-axis")
       .then((res) => res.json())
       .then((data: AxisSuggestion & { source?: string }) => {
         if (appliedParentAxesRef.current) return;
@@ -244,7 +263,7 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
       })
       .catch(() => {})
       .finally(() => setLoadingAxes(false));
-  }, [groupIdForAxes, initialDailyAxes]);
+  }, [groupIdForAxes, initialDailyAxes, selectedGroupInterests]);
 
   const handleRegenerateAxis = useCallback(
     async (axis: "horizontal" | "vertical") => {
