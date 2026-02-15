@@ -4,7 +4,7 @@
 
 - **Profile** ([app/profile/page.tsx](app/profile/page.tsx)): Shows "Account" title, display name, then "Score history" and "Profile records (Extreme consensus)". No header actions, no tags, no current/past games split as specified.
 - **Games** ([app/games/page.tsx](app/games/page.tsx)): Lists finished games with rank; no group names, no streaks, no horizontal scroll.
-- **Groups**: [saved_groups](supabase/migrations/20260215000000_accounts_saved_groups.sql) is **owner-only** (RLS: `owner_id = auth.uid()`). [saved_group_members](supabase/migrations/20260215000000_accounts_saved_groups.sql) has `display_name` + `sort_order` only (no `player_id`). Used on home to pre-fill names and in GameResultsView to "Save group" (owner + list of names). No concept of "members who can see the group" or "leave group."
+- **Groups**: [saved_groups](supabase/migrations/20260215000000_accounts_saved_groups.sql) stores group metadata (owner, name, settings). Membership is in [group_members](supabase/migrations/20260215100000_groups_and_tags.sql) only (`saved_group_members` was dropped). `group_members` has `player_id` (nullable), `display_name`, `is_anonymous`, `sort_order`, `joined_at`. Used for pre-fill, "Save group" on results, group pages, leave/add/transfer.
 - **Games table**: No `group_id`; games are not linked to groups.
 
 ---
@@ -27,7 +27,7 @@
 
 Current design: one owner + a roster of display names. Desired: multiple **members** (users or anonymous), visibility for all members, leave, add/remove, transfer ownership.
 
-- **New table `group_members`** (replaces or coexists with `saved_group_members` for "who is in the group"):
+- **Table `group_members`** (single source for "who is in the group"; `saved_group_members` has been removed):
   - `group_id`, `player_id` (nullable for anonymous), `display_name`, `is_anonymous` (boolean), `sort_order`, `joined_at`.
   - Owner must appear as a row (e.g. when creating group, insert owner into `group_members`). RLS: members can SELECT group and group_members; INSERT/UPDATE/DELETE per policy below.
 - **RLS for `saved_groups`**: Extend so that **any group member** can SELECT (not only owner). **Any group member** can UPDATE the group (at least `name`) so anyone can edit the group name. INSERT/DELETE remain owner-only (or as needed for leave/transfer).
@@ -39,7 +39,7 @@ Current design: one owner + a roster of display names. Desired: multiple **membe
 - **Transfer ownership**: Three-dot menu on a member row (or on owner row) → "Transfer group ownership" → confirm → update `saved_groups.owner_id` to selected member; ensure that member is in `group_members`.
 - **Anonymous members**: `player_id` null, `is_anonymous = true`; show `display_name` + incognito icon. "Most recent display name" can come from last game_players.display_name for that anonymous slot if we ever link; for now, display_name is stored when they're added.
 
-**Migration strategy**: New migration that adds `group_members`, adds `games.group_id`, adds group settings columns and `user_featured_tags`; backfills `group_members` from existing `saved_group_members` where possible (match by display_name to players? or just create anonymous members). Optionally keep `saved_group_members` for "roster for pre-fill" or merge into `group_members` (one row per member; display_name used for pre-fill when starting a game from group). Plan assumes we **evolve to `group_members`** as the single source of membership; "roster for new game" = list of group_members for that group.
+**Done**: `group_members` is the single source of membership. Migration [20260215100000_groups_and_tags.sql](supabase/migrations/20260215100000_groups_and_tags.sql) added `group_members` and backfilled from `saved_group_members`; [20260215200000_drop_saved_group_members.sql](supabase/migrations/20260215200000_drop_saved_group_members.sql) dropped `saved_group_members`. "Save group" (GameResultsView, ResultsView) and "create game from group" use `group_members` only.
 
 ### 1.4 Streaks (per-group only)
 
@@ -143,7 +143,7 @@ Current design: one owner + a roster of display names. Desired: multiple **membe
 
 | Step | What |
 |------|------|
-| 1 | **Schema migration**: `games.group_id`; `group_members` table; RLS for members to read groups; group settings columns (`anyone_can_add_members`, `only_admin_can_remove`, **`daily_game_enabled`**); `user_featured_tags`; backfill/decide saved_group_members vs group_members. |
+| 1 | **Schema migration**: `games.group_id`; `group_members` table; RLS for members to read groups; group settings columns (`anyone_can_add_members`, `only_admin_can_remove`, **`daily_game_enabled`**); `user_featured_tags`; backfill from `saved_group_members` then drop `saved_group_members` (app uses only `group_members`). |
 | 2 | **Profile header**: Settings icon → `/profile/settings`, Groups icon → `/profile/groups`. **Top bar**: Account name/icon in AppNav that links to `/profile` from anywhere. |
 | 3 | **Tags**: Compute candidate tags from past games (axis-end + agreement %); `user_featured_tags` CRUD; tags section on profile with Plus to add featured. |
 | 4 | **Streak**: Compute **per-group** streak (consecutive days with at least one game in that group); show on profile current-game cards and on group page. |
