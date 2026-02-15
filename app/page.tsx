@@ -82,7 +82,7 @@ export default function Home() {
         );
         setPastGameAxes(formatted);
       });
-  }, [user?.id]);
+  }, [user]);
 
   // Fetch saved groups when linked
   useEffect(() => {
@@ -206,7 +206,7 @@ export default function Home() {
     setPlayerNames((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCreateGame = async (e: React.FormEvent) => {
+  const handleCreateGame = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
 
     if (!xLow.trim() || !xHigh.trim() || !yLow.trim() || !yHigh.trim()) {
@@ -322,7 +322,7 @@ export default function Home() {
             Friend Place
           </h1>
           <p className="text-secondary">
-            Place yourself on the chart, then guess where your friends belong.
+            Place yourself on the chart, then guess where your friends placed themselves.
             Share the link and see who knows each other best.
           </p>
         </div>
