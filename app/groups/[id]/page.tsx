@@ -634,7 +634,7 @@ export default function GroupDetailPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {memberFeaturedTags[m.player_id].map((t, i) => (
                           <span key={`${m.player_id}-${t.label}-${i}`} className="inline-flex rounded-full bg-surface-muted/80 border border-surface-muted px-2.5 py-0.5 text-xs text-black">
-                            {t.agreement_pct}% {t.label}
+                            {t.agreement_pct}% {t.label.replace(/^\d+%\s*/, "").trim() || t.label}
                           </span>
                         ))}
                       </div>

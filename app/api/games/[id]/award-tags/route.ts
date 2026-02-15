@@ -81,28 +81,28 @@ export async function POST(
     const candidates: { label: string; agreement_pct: number; source_axis: "x" | "y" }[] = [];
     if (pctHighX >= CONSENSUS_THRESHOLD_PCT) {
       candidates.push({
-        label: `${pctHighX}% ${game.axis_x_label_high}`,
+        label: game.axis_x_label_high,
         agreement_pct: pctHighX,
         source_axis: "x",
       });
     }
     if (pctLowX >= CONSENSUS_THRESHOLD_PCT) {
       candidates.push({
-        label: `${pctLowX}% ${game.axis_x_label_low}`,
+        label: game.axis_x_label_low,
         agreement_pct: pctLowX,
         source_axis: "x",
       });
     }
     if (pctHighY >= CONSENSUS_THRESHOLD_PCT) {
       candidates.push({
-        label: `${pctHighY}% ${game.axis_y_label_high}`,
+        label: game.axis_y_label_high,
         agreement_pct: pctHighY,
         source_axis: "y",
       });
     }
     if (pctLowY >= CONSENSUS_THRESHOLD_PCT) {
       candidates.push({
-        label: `${pctLowY}% ${game.axis_y_label_low}`,
+        label: game.axis_y_label_low,
         agreement_pct: pctLowY,
         source_axis: "y",
       });

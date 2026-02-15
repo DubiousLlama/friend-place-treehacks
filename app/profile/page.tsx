@@ -74,6 +74,11 @@ function getRankSuffix(n: number): string {
   }
 }
 
+/** Strip leading "NN% " from label so we only show percentage once (agreement_pct is shown separately). */
+function tagLabelOnly(label: string): string {
+  return label.replace(/^\d+%\s*/, "").trim() || label;
+}
+
 export default function ProfilePage() {
   const { user, loading: authLoading, isLinked } = useAuth();
   const router = useRouter();
@@ -388,7 +393,7 @@ export default function ProfilePage() {
                     key={t.id}
                     className="inline-flex items-center gap-1 rounded-full bg-surface border border-surface-muted px-3 py-1 text-sm text-black"
                   >
-                    {t.agreement_pct}% {t.label}
+                    {t.agreement_pct}% {tagLabelOnly(t.label)}
                     <button
                       type="button"
                       onClick={() => removeFeaturedTag(t.id)}
@@ -427,7 +432,7 @@ export default function ProfilePage() {
                             onClick={() => addFeaturedTag(c)}
                             className="w-full rounded-lg border border-surface-muted bg-surface px-3 py-2 text-left text-sm text-black hover:bg-surface-muted transition-colors"
                           >
-                            {c.agreement_pct}% {c.label}
+                            {c.agreement_pct}% {tagLabelOnly(c.label)}
                           </button>
                         </li>
                       ))}
