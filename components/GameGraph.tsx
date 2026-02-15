@@ -83,7 +83,7 @@ function computeLayout(
   const maxVpH = Math.max(0, availH - 2 * effectiveTrackV - 2 * effectiveGap);
 
   // Base square size at zoom=1 (uses full label tracks — never changes with zoom)
-  const baseGridW = Math.min(availW, 500);
+  const baseGridW = Math.min(availW, 700);
   const baseVpFromW = baseGridW - 2 * fullTrackH - 2 * GRID_GAP;
   const baseMaxVpH = Math.max(0, availH - 2 * fullTrackV - 2 * GRID_GAP);
   const baseSize = Math.max(0, Math.min(baseVpFromW, baseMaxVpH));
@@ -606,6 +606,7 @@ export function GameGraph({
 
   // ---- Render ----
   const hasMeasured = availableSize.w > 0 && availableSize.h > 0;
+
 
   return (
     <div ref={measureRef} className="w-full h-full flex items-center justify-center">
