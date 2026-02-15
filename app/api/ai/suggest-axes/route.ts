@@ -12,15 +12,19 @@ import {
   incrementAxesUsed,
 } from "@/lib/device-usage";
 
-const DAILY_AXES_LIMIT = 10;
+const DAILY_AXES_LIMIT = 150;
 
 type AxisKind = "horizontal" | "vertical";
 
 const isDev = process.env.NODE_ENV === "development";
 
-function json500(message: string, detail?: string) {
+function json500(message: string, detail?: string, phase?: string) {
   return NextResponse.json(
-    { error: message, ...(isDev && detail ? { detail } : {}) },
+    {
+      error: message,
+      ...(isDev && detail ? { detail } : {}),
+      ...(phase ? { phase } : {}),
+    },
     { status: 500 },
   );
 }
@@ -48,11 +52,22 @@ export async function POST(request: NextRequest) {
 
   try {
     const deviceKey = getDeviceKey(request);
-    const usage = await getOrCreateDailyUsage(deviceKey, request);
+    let usage: Awaited<ReturnType<typeof getOrCreateDailyUsage>>;
+    try {
+      usage = await getOrCreateDailyUsage(deviceKey, request);
+    } catch (usageErr) {
+      const msg = usageErr instanceof Error ? usageErr.message : String(usageErr);
+      console.error("[suggest-axes] getOrCreateDailyUsage failed:", msg);
+      return json500(
+        "Failed to generate axes. Try again or enter your own!",
+        isDev ? msg : undefined,
+        "usage",
+      );
+    }
     if (usage.axes_count >= DAILY_AXES_LIMIT) {
       return NextResponse.json(
         {
-          error: "Daily limit of 10 axis generations reached. Resets at midnight UTC.",
+          error: "Daily limit of 150 axis generations reached. Resets at midnight UTC.",
         },
         { status: 429 }
       );
@@ -92,6 +107,7 @@ export async function POST(request: NextRequest) {
       return json500(
         "Failed to generate axes. Try again or enter your own!",
         "generateText returned null (see server terminal for [ai/provider] logs)",
+        "generate",
       );
     }
 
@@ -102,13 +118,14 @@ export async function POST(request: NextRequest) {
         return json500(
           "Failed to generate axes. Try again or enter your own!",
           `parse failed. Raw (first 300 chars): ${raw.slice(0, 300)}`,
+          "parse",
         );
       }
       const xLow = result.x_low?.trim();
       const xHigh = result.x_high?.trim();
       if (!xLow || !xHigh) {
         console.error("[suggest-axes] horizontal response missing fields:", result);
-        return json500("Failed to generate horizontal axes", JSON.stringify(result));
+        return json500("Failed to generate horizontal axes", JSON.stringify(result), "parse");
       }
       await incrementAxesUsed(deviceKey);
       return NextResponse.json({ x_low: xLow, x_high: xHigh });
@@ -120,13 +137,14 @@ export async function POST(request: NextRequest) {
       return json500(
         "Failed to generate axes. Try again or enter your own!",
         `parse failed. Raw (first 300 chars): ${raw.slice(0, 300)}`,
+        "parse",
       );
     }
     const yLow = result.y_low?.trim();
     const yHigh = result.y_high?.trim();
     if (!yLow || !yHigh) {
       console.error("[suggest-axes] vertical response missing fields:", result);
-      return json500("Failed to generate vertical axes", JSON.stringify(result));
+      return json500("Failed to generate vertical axes", JSON.stringify(result), "parse");
     }
     await incrementAxesUsed(deviceKey);
     return NextResponse.json({ y_low: yLow, y_high: yHigh });
@@ -149,6 +167,7 @@ export async function POST(request: NextRequest) {
     return json500(
       "Failed to generate axes",
       isDev ? `throw: ${message}` : undefined,
+      "error",
     );
   }
 }

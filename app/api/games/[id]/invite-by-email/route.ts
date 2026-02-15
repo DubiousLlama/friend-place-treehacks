@@ -9,7 +9,7 @@ import {
   incrementInviteEmailsSent,
 } from "@/lib/device-usage";
 
-const DAILY_INVITE_EMAIL_LIMIT = 20;
+const DAILY_INVITE_EMAIL_LIMIT = 50;
 
 const INVITE_EXPIRY_DAYS = 7;
 
@@ -64,7 +64,7 @@ export async function POST(
   const usage = await getOrCreateDailyUsage(deviceKey, request);
   if (usage.invite_count + invites.length > DAILY_INVITE_EMAIL_LIMIT) {
     return NextResponse.json(
-      { error: "Daily limit of 20 invite emails reached. Resets at midnight UTC." },
+      { error: "Daily limit of 50 invite emails reached. Resets at midnight UTC." },
       { status: 429 }
     );
   }
