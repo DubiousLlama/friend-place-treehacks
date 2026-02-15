@@ -570,6 +570,36 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
         );
       })}
 
+      {/* Legend */}
+      <div className="mt-3 pt-3 border-t border-black/5 flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <span
+            className="shrink-0 rounded-full"
+            style={{
+              width: resultsSizes.selfDotSize * 0.7,
+              height: resultsSizes.selfDotSize * 0.7,
+              backgroundColor: "#888",
+              border: "2px solid white",
+              boxShadow: "0 0 0 1px #88888850, 0 1px 3px rgba(0,0,0,0.15)",
+            }}
+          />
+          <span className="text-xs font-body text-secondary">Self-placement</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="shrink-0 rounded-full"
+            style={{
+              width: resultsSizes.guessDotSize,
+              height: resultsSizes.guessDotSize,
+              backgroundColor: "#888",
+              marginLeft: (resultsSizes.selfDotSize * 0.7 - resultsSizes.guessDotSize) / 2,
+              marginRight: (resultsSizes.selfDotSize * 0.7 - resultsSizes.guessDotSize) / 2,
+            }}
+          />
+          <span className="text-xs font-body text-secondary">Guess by another player</span>
+        </div>
+      </div>
+
       {/* Breakdown summary card */}
       <AnimatePresence>
         {breakdownPlayer && (

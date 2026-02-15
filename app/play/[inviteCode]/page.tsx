@@ -10,6 +10,7 @@ import { GameInfoPanel } from "@/components/GameInfoPanel";
 import { ResultsView } from "@/components/ResultsView";
 import type { Database } from "@/lib/types/database";
 import type { Position } from "@/lib/game-types";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 type Game = Database["public"]["Tables"]["games"]["Row"];
 type GamePlayer = Database["public"]["Tables"]["game_players"]["Row"];
@@ -32,6 +33,7 @@ export default function PlayPage() {
   // When true, NameSelector is shown in "switch" mode (current data preserved)
   const [switchingIdentity, setSwitchingIdentity] = useState(false);
 
+  const isMobile = useIsMobile();
   const supabase = createClient();
 
   const fetchAll = useCallback(async () => {
@@ -377,24 +379,24 @@ export default function PlayPage() {
   // Graph view: first visit starts here; returning users can get here via
   // "Continue placing" from the dashboard.
   if (view === "graph") {
+    const gameInfoPanel = (
+      <GameInfoPanel
+        game={game}
+        gamePlayers={gamePlayers}
+        mySlot={mySlot}
+        inviteCode={inviteCode}
+        guessedCount={guessedCount}
+        onUnclaim={() => setSwitchingIdentity(true)}
+        onEditName={handleEditDisplayName}
+        isHost={isHost}
+        onEndGame={handleEndGame}
+        variant={isMobile ? "dropdown" : "sidebar"}
+      />
+    );
+
     return (
       <div className="flex-1 min-h-0 flex flex-col bg-surface overflow-y-auto">
-        {/* Pull-down info panel — won't compress */}
-        <div className="shrink-0">
-          <GameInfoPanel
-            game={game}
-            gamePlayers={gamePlayers}
-            mySlot={mySlot}
-            inviteCode={inviteCode}
-            guessedCount={guessedCount}
-            onUnclaim={() => setSwitchingIdentity(true)}
-            onEditName={handleEditDisplayName}
-            isHost={isHost}
-            onEndGame={handleEndGame}
-          />
-        </div>
-
-        {/* Graph placing experience — minimum height prevents compression */}
+        {/* Graph placing experience — fills available space */}
         <div className="flex-1 min-h-[85dvh]">
           <PlacingPhase
             game={game}
@@ -404,6 +406,7 @@ export default function PlayPage() {
             initialSelfPosition={existingSelfPosition}
             initialOtherPositions={initialOtherPositions}
             onSubmit={handleSubmitPlacements}
+            sidebarContent={gameInfoPanel}
           />
         </div>
       </div>
