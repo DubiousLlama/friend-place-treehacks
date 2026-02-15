@@ -16,7 +16,7 @@ ALTER TABLE saved_groups
 ALTER TABLE saved_groups ALTER COLUMN name DROP NOT NULL;
 
 -- 3. Group members (who is in the group; supports anonymous)
-CREATE TABLE group_members (
+CREATE TABLE IF NOT EXISTS group_members (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   group_id     uuid NOT NULL REFERENCES saved_groups(id) ON DELETE CASCADE,
   player_id    uuid REFERENCES players(id) ON DELETE CASCADE,
@@ -25,11 +25,11 @@ CREATE TABLE group_members (
   sort_order   smallint NOT NULL DEFAULT 0,
   joined_at    timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_group_members_group ON group_members(group_id);
-CREATE INDEX idx_group_members_player ON group_members(player_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members(group_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_player ON group_members(player_id);
 
 -- 4. User featured tags (for profile and future prompts)
-CREATE TABLE user_featured_tags (
+CREATE TABLE IF NOT EXISTS user_featured_tags (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       uuid NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   label         text NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE user_featured_tags (
   sort_order    smallint NOT NULL DEFAULT 0,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_user_featured_tags_user ON user_featured_tags(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_featured_tags_user ON user_featured_tags(user_id);
 
 -- =============================================
 -- RLS: saved_groups (extend for members)
@@ -145,19 +145,25 @@ CREATE POLICY "Users can delete own featured tags"
   USING (user_id = auth.uid());
 
 -- =============================================
--- Backfill group_members from existing saved_groups
+-- Backfill group_members from existing saved_groups (only when table is empty)
 -- =============================================
 
--- For each saved_group: add owner as first group_member
+-- For each saved_group: add owner as first group_member (skip if group_members already has rows)
 INSERT INTO group_members (group_id, player_id, display_name, is_anonymous, sort_order, joined_at)
 SELECT sg.id, sg.owner_id, COALESCE(p.display_name, 'Member'), false, 0, sg.created_at
 FROM saved_groups sg
-LEFT JOIN players p ON p.id = sg.owner_id;
-
--- Add each saved_group_member as anonymous member (skip if same display_name as owner to avoid duplicate)
-INSERT INTO group_members (group_id, player_id, display_name, is_anonymous, sort_order, joined_at)
-SELECT sgm.group_id, NULL, sgm.display_name, true, sgm.sort_order + 1, now()
-FROM saved_group_members sgm
-JOIN saved_groups sg ON sg.id = sgm.group_id
 LEFT JOIN players p ON p.id = sg.owner_id
-WHERE (p.display_name IS NULL OR sgm.display_name <> p.display_name);
+WHERE (SELECT count(*) FROM group_members) = 0;
+
+-- Add each saved_group_member as anonymous member (only if saved_group_members table still exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'saved_group_members') THEN
+    INSERT INTO group_members (group_id, player_id, display_name, is_anonymous, sort_order, joined_at)
+    SELECT sgm.group_id, NULL, sgm.display_name, true, sgm.sort_order + 1, now()
+    FROM saved_group_members sgm
+    JOIN saved_groups sg ON sg.id = sgm.group_id
+    LEFT JOIN players p ON p.id = sg.owner_id
+    WHERE (p.display_name IS NULL OR sgm.display_name <> p.display_name);
+  END IF;
+END $$;
