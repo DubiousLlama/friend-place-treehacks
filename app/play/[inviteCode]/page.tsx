@@ -7,6 +7,7 @@ import { NameSelector } from "@/components/NameSelector";
 import { GameDashboard } from "@/components/GameDashboard";
 import { PlacingPhase } from "@/components/PlacingPhase";
 import { GameInfoPanel } from "@/components/GameInfoPanel";
+import { ResultsView } from "@/components/ResultsView";
 import type { Database } from "@/lib/types/database";
 import type { Position } from "@/lib/game-types";
 
@@ -126,6 +127,20 @@ export default function PlayPage() {
     };
   }, [game?.id, supabase]);
 
+  // Check for time-based game ending on load
+  // If the deadline has passed and the game is still in "placing", trigger check-end.
+  useEffect(() => {
+    if (!game?.id || game.phase !== "placing") return;
+    if (!game.submissions_lock_at) return;
+
+    const deadline = new Date(game.submissions_lock_at);
+    if (deadline <= new Date()) {
+      fetch(`/api/games/${game.id}/check-end`, { method: "POST" }).catch(() => {
+        // Non-critical — user can reload
+      });
+    }
+  }, [game?.id, game?.phase, game?.submissions_lock_at]);
+
   // Realtime: game phase changes
   useEffect(() => {
     if (!game?.id) return;
@@ -203,7 +218,14 @@ export default function PlayPage() {
         if (insErr) console.error("Failed to insert guesses:", insErr);
       }
 
-      // 4. Refresh data and switch to dashboard
+      // 4. Check if game should end (early-end or time-based)
+      try {
+        await fetch(`/api/games/${game.id}/check-end`, { method: "POST" });
+      } catch {
+        // Non-critical — Realtime will catch phase changes
+      }
+
+      // 5. Refresh data and switch to dashboard
       await fetchAll();
       setView("dashboard");
     },
@@ -211,24 +233,30 @@ export default function PlayPage() {
   );
 
   // ---- End game handler: host transitions to results phase ----
+  // Uses the check-end API with force=true so scores are computed.
 
   const handleEndGame = useCallback(async () => {
     if (!game || !currentPlayerId) return;
     if (game.created_by !== currentPlayerId) return;
 
-    const { error } = await supabase
-      .from("games")
-      .update({ phase: "results" as const })
-      .eq("id", game.id);
+    try {
+      const res = await fetch(`/api/games/${game.id}/check-end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: true }),
+      });
 
-    if (error) {
-      console.error("Failed to end game:", error);
-    } else {
-      // Realtime subscription will update the game state automatically,
-      // but also refresh to be safe
-      await fetchAll();
+      if (!res.ok) {
+        console.error("Failed to end game:", await res.text());
+      } else {
+        // Realtime subscription will update the game state automatically,
+        // but also refresh to be safe
+        await fetchAll();
+      }
+    } catch (err) {
+      console.error("Failed to end game:", err);
     }
-  }, [game, currentPlayerId, supabase, fetchAll]);
+  }, [game, currentPlayerId, fetchAll]);
 
   // ---- Edit display name: same slot, update label only ----
 
@@ -316,11 +344,11 @@ export default function PlayPage() {
   // Game is in results phase
   if (game.phase === "results") {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <p className="text-secondary">
-          Results — scoreboard and placement reveal. (Coming in Phase 5.)
-        </p>
-      </div>
+      <ResultsView
+        game={game}
+        gamePlayers={gamePlayers}
+        currentPlayerId={currentPlayerId!}
+      />
     );
   }
 
@@ -350,7 +378,7 @@ export default function PlayPage() {
   // "Continue placing" from the dashboard.
   if (view === "graph") {
     return (
-      <div className="h-dvh flex flex-col bg-surface overflow-y-auto">
+      <div className="flex-1 min-h-0 flex flex-col bg-surface overflow-y-auto">
         {/* Pull-down info panel — won't compress */}
         <div className="shrink-0">
           <GameInfoPanel
