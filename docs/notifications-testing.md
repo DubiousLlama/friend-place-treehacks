@@ -7,6 +7,55 @@
   - No record in Resend usually means the Edge Function either wasn’t invoked or didn’t reach the Resend call (see Troubleshooting below).
   - Secrets for Resend must be set in **Supabase** (Project Settings → Edge Functions → Secrets), not only in `.env.local`. `.env.local` is for the Next.js app; Edge Functions don’t see it.
 
+## Preview email copy (no send)
+
+To check that notification **prompts** produce decent copy without sending any email:
+
+1. Ensure `ANTHROPIC_API_KEY` is set in `.env.local` (same as for AI axis suggestions).
+2. From the project root run `npm run dev`.
+3. Call the preview API (no Resend or Edge Functions involved):
+
+   ```bash
+   curl -X POST http://localhost:3000/api/notifications/preview -H "Content-Type: application/json" -d "{\"kind\":\"results_reminder\"}"
+   ```
+
+   Optional: pass a custom `context` to match real game data:
+
+   ```bash
+   curl -X POST http://localhost:3000/api/notifications/preview -H "Content-Type: application/json" -d "{\"kind\":\"results_reminder\",\"context\":{\"axis_x_low\":\"Chaos\",\"axis_x_high\":\"Order\",\"axis_y_low\":\"Introvert\",\"axis_y_high\":\"Extrovert\",\"recipientDisplayName\":\"Sam\",\"otherPlayerNames\":[\"Alex\",\"Jordan\"],\"inviteCode\":\"XYZ99\"}}"
+   ```
+
+4. Response includes `fullMessage` (the email body), `staticPart`, `quip` (AI line), `subject`, and `_debug` (prompts sent to the model). Use this to tune wording; no emails are sent.
+
+**Kinds:** `new_game_invite`, `mid_game_nudge`, `results_reminder`.
+
+---
+
+## Updating Supabase notification prompts
+
+The prompts (and static copy) used when Supabase sends notification emails live in **`supabase/functions/_shared/ai.ts`**. After editing that file, deploy the Edge Functions so the new copy is used:
+
+1. **Link your project** (once per machine if not already linked):
+   ```bash
+   npx supabase link --project-ref <your-project-ref>
+   ```
+   Get `<your-project-ref>` from the Supabase dashboard URL: `https://supabase.com/dashboard/project/<project-ref>`.
+
+2. **Deploy the notification functions** (each deploy bundles the latest `_shared/ai.ts`):
+   ```bash
+   npx supabase functions deploy notify-game-event
+   npx supabase functions deploy notify-stale-check
+   npx supabase functions deploy notify-game-ended
+   ```
+   Or deploy all functions at once:
+   ```bash
+   npx supabase functions deploy
+   ```
+
+3. **Secrets** (e.g. `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`) are set in the Supabase Dashboard → Project Settings → Edge Functions → Secrets; they are not read from `.env.local`.
+
+---
+
 ## Test Resend locally (no Vercel, no Supabase functions)
 
 To confirm Resend works without deploying anything:
@@ -56,6 +105,19 @@ To confirm Resend works without deploying anything:
 3. Players who haven’t submitted and have an email (or phone if SMS) should get a nudge. Check inbox and Resend.
 
 ## Troubleshooting
+
+### Emails send but there’s no "Play: https://..." link
+
+The link is built inside the Edge Function using the **`APP_URL`** secret. If `APP_URL` is not set in Supabase, the message is sent without the link.
+
+- In **Supabase Dashboard** → **Project Settings** → **Edge Functions** → **Secrets**, add:
+  - **Name:** `APP_URL`
+  - **Value:** your app’s public URL, e.g. `https://friendplace.vercel.app` or `https://yourdomain.com` (no trailing slash).
+- Redeploy the notification functions so they pick up the new secret (or wait for the next deploy; secrets are read at runtime).
+
+No code changes are required—only this secret.
+
+---
 
 ### No record in Resend
 

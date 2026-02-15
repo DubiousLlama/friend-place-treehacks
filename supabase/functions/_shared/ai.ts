@@ -1,6 +1,6 @@
 /**
- * Generate notification message body using Anthropic API.
- * Prompt is a simple placeholder; can be refined later.
+ * Generate notification message: static part (axes + context) + AI-generated quip.
+ * Axes and core info are always in the static part; Anthropic only generates a short tease.
  */
 
 export type NotificationKind = "mid_game_nudge" | "new_game_invite" | "results_reminder";
@@ -14,72 +14,116 @@ export interface GameContext {
   submittedCount?: number;
   totalCount?: number;
   inviteCode?: string;
-  /** For results_reminder: display name of the person we're notifying */
   recipientDisplayName?: string;
-  /** For results_reminder: display names of the other players in the game (not the recipient). Used to personalize without spoiling. */
   otherPlayerNames?: string[];
-  /** For results_reminder: total number of players in the game */
   totalPlayerCount?: number;
 }
 
 const API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514";
 
+const axesString = (c: GameContext) =>
+  `${c.axis_x_low} ↔ ${c.axis_x_high} / ${c.axis_y_low} ↔ ${c.axis_y_high}`;
+
+/** Build the play URL for this game. Requires APP_URL and inviteCode in context / env. */
+function playUrl(inviteCode: string | undefined): string | null {
+  const base = Deno.env.get("APP_URL");
+  if (!base?.trim() || !inviteCode?.trim()) return null;
+  const url = base.replace(/\/$/, "");
+  return `${url}/play/${inviteCode.trim()}`;
+}
+
+/** Static first part of the message (axes + kind-specific line + link). Same every time for the same context. */
+export function buildStaticNotificationPart(kind: NotificationKind, context: GameContext): string {
+  const axes = axesString(context);
+  const link = playUrl(context.inviteCode);
+  let lines: string[] = [];
+  switch (kind) {
+    case "new_game_invite":
+      lines = [`You're in a new Friend Place game. Axes: ${axes}.`];
+      break;
+    case "mid_game_nudge":
+      lines = [`${context.submittedCount} of ${context.totalCount} have submitted. Axes: ${axes}.`];
+      break;
+    case "results_reminder":
+      lines = [`Your Friend Place game has results. Axes: ${axes}.`];
+      break;
+    default:
+      lines = [`Friend Place. Axes: ${axes}.`];
+  }
+  if (link) {
+    lines.push("", `Play: ${link}`);
+  }
+  return lines.join("\n");
+}
+
+/** Fallback quips when AI is unavailable. */
+const FALLBACK_QUIPS: Record<NotificationKind, string> = {
+  new_game_invite: "Place yourself and see where your friends put you.",
+  mid_game_nudge: "Don't miss out—add your picks and see how it's going.",
+  results_reminder: "See how your friends placed you and who knew you best.",
+};
+
+/**
+ * Generate the full message: static part (axes + info) + one AI-generated quip.
+ * If AI fails, uses static part + fallback quip.
+ */
 export async function generateNotificationMessage(
   kind: NotificationKind,
   context: GameContext
 ): Promise<string | null> {
+  const staticPart = buildStaticNotificationPart(kind, context);
+  const quip = await generateQuip(kind, context);
+  const line = quip ?? FALLBACK_QUIPS[kind];
+  return `${staticPart}\n\n${line}`;
+}
+
+/** Ask Anthropic for one short quip/tease sentence only. No axes in the output—we add that statically. */
+async function generateQuip(kind: NotificationKind, context: GameContext): Promise<string | null> {
   if (!API_KEY) {
     console.warn("[ai] ANTHROPIC_API_KEY not set");
     return null;
   }
 
-  const systemPrompt = `You write very short, friendly email/SMS-style reminders for a casual web game called Friend Place. Each message is one or two sentences max. No hashtags or marketing speak. Never reveal placements, scores, rankings, or where anyone was placed on the axes—only create curiosity so they open the app.`;
-  const axes = `${context.axis_x_low}–${context.axis_x_high} and ${context.axis_y_low}–${context.axis_y_high}`;
+  const systemPrompt = `You write one short, punchy sentence (a "quip" or tease) for a casual web game called Friend Place. No hashtags or marketing speak. Never reveal placements, scores, rankings, or where anyone was placed—only create curiosity. Output ONLY that one sentence, nothing else. Do not repeat axis names or game info; the user already gets that in a separate line.`;
 
   let userPrompt: string;
   switch (kind) {
     case "new_game_invite":
-      userPrompt = `Someone added you to a Friend Place game. The axes are: ${axes}. Write a one-sentence teaser to get them to open the game (include the axes in a fun way).`;
+      userPrompt = `Someone added them to a new game. Write one short, fun sentence to get them to open the app and place themselves (e.g. a light tease or dare).`;
       break;
     case "mid_game_nudge":
-      userPrompt = `A Friend Place game is in progress. ${context.submittedCount} of ${context.totalCount} players have submitted. Axes: ${axes}. Write a one-sentence teaser for players who haven't submitted yet (don't name names, just hint that something is happening).`;
+      userPrompt = `They haven't submitted yet; ${context.submittedCount} of ${context.totalCount} have. Write one short sentence to nudge them (don't name who submitted, just create FOMO or curiosity).`;
       break;
     case "results_reminder": {
       const names = context.otherPlayerNames?.length
         ? context.otherPlayerNames.join(", ")
-        : "your friends";
-      const nameHint =
-        context.recipientDisplayName?.trim()
-          ? ` The recipient's name is ${context.recipientDisplayName}.`
-          : "";
-      userPrompt = `A Friend Place game has ended. The axes were: ${axes}. There were ${context.totalPlayerCount ?? "several"} players; the others are: ${names}.${nameHint}
-
-Write a short, personalized message (1–2 sentences) to get this person to open the app and view their results. You may mention the axes or the other players' names to create curiosity (e.g. "see where ${context.otherPlayerNames?.[0] ?? "they"} placed you"). Do NOT reveal any actual placements, scores, or rankings—only tease that the results are in and worth looking at.`;
+        : "their friends";
+      const nameHint = context.recipientDisplayName?.trim()
+        ? ` Recipient is ${context.recipientDisplayName}; other players: ${names}.`
+        : ` Other players: ${names}.`;
+      userPrompt = `The game has ended and they haven't viewed results yet.${nameHint} Write one short, personalized tease to get them to open the app (e.g. mention seeing where friends placed them, or who got it right—but do NOT reveal any actual placements or scores).`;
       break;
     }
     default:
-      userPrompt = `Friend Place reminder. Axes: ${axes}. Write one short friendly sentence encouraging them to check the game.`;
+      userPrompt = `Write one short friendly sentence encouraging them to check the game.`;
   }
 
   try {
-    const res = await fetch(
-      "https://api.anthropic.com/v1/messages",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 128,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        }),
-      }
-    );
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 80,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
     if (!res.ok) {
       const err = await res.text();
       console.error("[ai] Anthropic error:", res.status, err);
@@ -90,7 +134,7 @@ Write a short, personalized message (1–2 sentences) to get this person to open
     const text = textBlock?.text?.trim();
     return text ?? null;
   } catch (e) {
-    console.error("[ai] generateNotificationMessage failed:", e);
+    console.error("[ai] generateQuip failed:", e);
     return null;
   }
 }

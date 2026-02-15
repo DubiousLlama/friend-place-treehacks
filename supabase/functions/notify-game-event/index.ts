@@ -162,6 +162,7 @@ async function maybeSendMidGameNudges(gameId: string): Promise<void> {
     submittedCount: submitted,
     totalCount: total,
     playerNames: slots.map((s) => s.display_name),
+    inviteCode: game.invite_code,
   };
   const channelType = getChannelType();
   const channel = await getNotificationChannel();

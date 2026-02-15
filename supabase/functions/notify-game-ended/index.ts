@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
   try {
     await sendResultsRemindersForGame({
       id: gameId,
+      invite_code: String(record.invite_code ?? ""),
       axis_x_label_low: String(record.axis_x_label_low ?? ""),
       axis_x_label_high: String(record.axis_x_label_high ?? ""),
       axis_y_label_low: String(record.axis_y_label_low ?? ""),

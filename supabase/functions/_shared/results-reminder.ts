@@ -8,6 +8,7 @@ import {
 
 export interface GameRow {
   id: string;
+  invite_code: string;
   axis_x_label_low: string;
   axis_x_label_high: string;
   axis_y_label_low: string;
@@ -62,6 +63,7 @@ export async function sendResultsRemindersForGame(game: GameRow): Promise<void> 
       recipientDisplayName: slot.display_name ?? undefined,
       otherPlayerNames: otherPlayerNames.length > 0 ? otherPlayerNames : undefined,
       totalPlayerCount: slots.length,
+      inviteCode: game.invite_code,
     };
 
     const message = await generateNotificationMessage("results_reminder", context);

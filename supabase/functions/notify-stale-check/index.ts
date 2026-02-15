@@ -114,7 +114,7 @@ async function runResultsReminders(): Promise<void> {
   const cutoff = new Date(Date.now() - RESULTS_REMINDER_HOURS * 60 * 60 * 1000).toISOString();
   const { data: games } = await supabaseAdmin
     .from("games")
-    .select("id, axis_x_label_low, axis_x_label_high, axis_y_label_low, axis_y_label_high")
+    .select("id, invite_code, axis_x_label_low, axis_x_label_high, axis_y_label_low, axis_y_label_high")
     .eq("phase", "results")
     .lt("created_at", cutoff);
   if (!games?.length) return;

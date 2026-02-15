@@ -2,6 +2,8 @@
 
 If confirmation emails from sign-up aren’t arriving (inbox or junk), it’s usually due to Supabase’s **default email limits** or missing **custom SMTP** configuration.
 
+**Important:** Confirmation emails (sign-up, password reset) are sent by **Supabase Auth** using the **SMTP** settings in the Supabase Dashboard. They are **not** sent by your app or by the Resend API used for game notifications. So even if a test email from your app (e.g. `/api/notifications/test`) works with `auto@yourdomain.com`, you must still configure **Supabase → Authentication → SMTP** with Resend’s SMTP so Supabase can send auth emails from that address.
+
 ---
 
 ## Why emails don’t arrive
@@ -74,3 +76,29 @@ Our callback route (`/auth/callback`) exchanges the token in the link for a sess
 - [ ] **Emails not arriving:** Set up **custom SMTP** (Option 1) or disable **Confirm email** (Option 2).
 - [ ] **Link in email doesn’t work:** Add your app’s callback URL to **Redirect URLs** in Supabase.
 - [ ] **Rate limit:** With custom SMTP you can adjust rate limits under Auth → Rate Limits if needed.
+
+---
+
+## Double-check when using Resend (e.g. auto@yourdomain.com)
+
+If you already send test emails from your app with Resend and confirmation emails still fail:
+
+1. **Supabase uses SMTP, not the Resend API**  
+   In [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Authentication** → **SMTP** (or Auth → Settings):
+   - [ ] **Enable Custom SMTP** is turned on.
+   - [ ] **Sender email:** exactly the address you use in Resend (e.g. `auto@wanderinglibrary.com`). Use only the email; Supabase often has a separate “Sender name” field.
+   - [ ] **Host:** `smtp.resend.com`
+   - [ ] **Port:** `465` (SSL) or `587` (TLS). Try 465 first if you get connection errors.
+   - [ ] **Username:** `resend` (literal)
+   - [ ] **Password:** your Resend API key (the `re_...` key). No spaces; copy again if it was truncated.
+
+2. **Resend: domain and sender**  
+   - [ ] In Resend → **Domains**, the domain in your sender (e.g. `wanderinglibrary.com`) is **Verified**. Until the domain is verified, you can’t send from `auto@wanderinglibrary.com` (except possibly to your own email in some cases).
+   - [ ] After domain verification, any address `*@wanderinglibrary.com` is allowed; no need to “create” `auto@` separately.
+
+3. **Redirect URL**  
+   - [ ] **Authentication** → **URL Configuration** (or Redirect URLs) includes the URL your app uses for the confirmation link, e.g. `https://yourdomain.com/auth/callback` and `http://localhost:3000/auth/callback`.
+
+4. **Errors from Supabase**  
+   - If Supabase shows an error when **saving** SMTP (e.g. “Authentication failed”), the API key or username is wrong or the key was revoked.
+   - If Supabase saves but **no email arrives**, check Resend dashboard for the send (or bounce), and your spam folder. Check Auth → Logs for “Email sent” or errors.

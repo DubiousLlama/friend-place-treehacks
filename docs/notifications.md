@@ -42,6 +42,7 @@ Notifications are sent by **email** using [Resend](https://resend.com). Recipien
 - `ANTHROPIC_API_KEY` — for AI-generated message text
 - `RESEND_API_KEY` — Resend API key
 - `RESEND_FROM_EMAIL` — sender email (e.g. `Friend Place <noreply@yourdomain.com>`)
+- `APP_URL` — public URL of your app (e.g. `https://friendplace.vercel.app` or `https://yourdomain.com`). Used so the static part of every notification can include a "Play: {APP_URL}/play/{inviteCode}" link.
 - `NOTIFICATION_CHANNEL` — `email` (default), or `sms` / `push`
 
 **For SMS (optional):**
