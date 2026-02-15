@@ -53,6 +53,7 @@ export type Database = {
           created_at: string;
           submissions_lock_at: string | null;
           end_early_when_complete: boolean;
+          group_id: string | null;
         };
         Insert: {
           id?: string;
@@ -66,6 +67,7 @@ export type Database = {
           created_at?: string;
           submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
+          group_id?: string | null;
         };
         Update: {
           id?: string;
@@ -79,6 +81,7 @@ export type Database = {
           created_at?: string;
           submissions_lock_at?: string | null;
           end_early_when_complete?: boolean;
+          group_id?: string | null;
         };
         Relationships: [
           {
@@ -86,6 +89,13 @@ export type Database = {
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "games_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "saved_groups";
             referencedColumns: ["id"];
           },
         ];
@@ -227,20 +237,29 @@ export type Database = {
         Row: {
           id: string;
           owner_id: string;
-          name: string;
+          name: string | null;
           created_at: string;
+          anyone_can_add_members: boolean;
+          only_admin_can_remove: boolean;
+          daily_game_enabled: boolean;
         };
         Insert: {
           id?: string;
           owner_id: string;
-          name: string;
+          name?: string | null;
           created_at?: string;
+          anyone_can_add_members?: boolean;
+          only_admin_can_remove?: boolean;
+          daily_game_enabled?: boolean;
         };
         Update: {
           id?: string;
           owner_id?: string;
-          name?: string;
+          name?: string | null;
           created_at?: string;
+          anyone_can_add_members?: boolean;
+          only_admin_can_remove?: boolean;
+          daily_game_enabled?: boolean;
         };
         Relationships: [
           {
@@ -252,31 +271,95 @@ export type Database = {
           },
         ];
       };
-      saved_group_members: {
+      group_members: {
         Row: {
           id: string;
           group_id: string;
+          player_id: string | null;
           display_name: string;
+          is_anonymous: boolean;
           sort_order: number;
+          joined_at: string;
         };
         Insert: {
           id?: string;
           group_id: string;
+          player_id?: string | null;
           display_name: string;
+          is_anonymous?: boolean;
           sort_order?: number;
+          joined_at?: string;
         };
         Update: {
           id?: string;
           group_id?: string;
+          player_id?: string | null;
           display_name?: string;
+          is_anonymous?: boolean;
           sort_order?: number;
+          joined_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "saved_group_members_group_id_fkey";
+            foreignKeyName: "group_members_group_id_fkey";
             columns: ["group_id"];
             isOneToOne: false;
             referencedRelation: "saved_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "group_members_player_id_fkey";
+            columns: ["player_id"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      user_featured_tags: {
+        Row: {
+          id: string;
+          user_id: string;
+          label: string;
+          agreement_pct: number;
+          game_id: string | null;
+          source_axis: "x" | "y" | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          label: string;
+          agreement_pct: number;
+          game_id?: string | null;
+          source_axis?: "x" | "y" | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          label?: string;
+          agreement_pct?: number;
+          game_id?: string | null;
+          source_axis?: "x" | "y" | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_featured_tags_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_featured_tags_game_id_fkey";
+            columns: ["game_id"];
+            isOneToOne: false;
+            referencedRelation: "games";
             referencedColumns: ["id"];
           },
         ];

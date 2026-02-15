@@ -67,12 +67,26 @@ export function GameResultsView({
       setSavingGroup(false);
       return;
     }
-    const members = gamePlayers.map((gp, i) => ({
+    // Insert owner as first group_member, then others (match ResultsView / group_members model)
+    const mySlot = gamePlayers.find((p) => p.player_id === currentPlayerId);
+    await supabase.from("group_members").insert({
       group_id: group.id,
-      display_name: gp.display_name,
-      sort_order: i,
-    }));
-    await supabase.from("saved_group_members").insert(members);
+      player_id: currentPlayerId,
+      display_name: mySlot?.display_name ?? "Member",
+      is_anonymous: false,
+      sort_order: 0,
+    });
+    let sortOrder = 1;
+    for (const gp of gamePlayers) {
+      if (gp.player_id === currentPlayerId) continue;
+      await supabase.from("group_members").insert({
+        group_id: group.id,
+        player_id: gp.player_id ?? null,
+        display_name: gp.display_name,
+        is_anonymous: gp.player_id == null,
+        sort_order: sortOrder++,
+      });
+    }
     setSavingGroup(false);
     setShowSaveGroup(false);
     setSaveGroupName("");

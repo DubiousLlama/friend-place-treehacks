@@ -8,7 +8,6 @@ import { useAuth } from "@/lib/use-auth";
 import type { Database } from "@/lib/types/database";
 
 type SavedGroup = Database["public"]["Tables"]["saved_groups"]["Row"];
-type SavedGroupMember = Database["public"]["Tables"]["saved_group_members"]["Row"];
 
 // ── localStorage helpers for rate-limiting regenerations ──
 const REGEN_COUNT_KEY = "fp-regen-count";
@@ -95,18 +94,18 @@ export default function Home() {
       .then(({ data }) => setSavedGroups((data as SavedGroup[]) ?? []));
   }, [isLinked, user]);
 
-  // Load group members when a group is selected
+  // Load group members when a group is selected (from group_members for roster)
   useEffect(() => {
     if (!selectedGroupId) return;
     const supabase = createClient();
     supabase
-      .from("saved_group_members")
+      .from("group_members")
       .select("display_name, sort_order")
       .eq("group_id", selectedGroupId)
       .order("sort_order", { ascending: true })
       .then(({ data }) => {
-        const names = (data as SavedGroupMember[] ?? []).map((m) => m.display_name);
-        setPlayerNames(names.length ? names.map((n) => n) : [""]);
+        const names = (data ?? []).map((m: { display_name: string }) => m.display_name);
+        setPlayerNames(names.length ? names : [""]);
       });
   }, [selectedGroupId]);
 
@@ -252,7 +251,7 @@ export default function Home() {
       // Compute submissions_lock_at as ISO string
       const lockAt = new Date(endTime).toISOString();
 
-      // Create game (starts in placing immediately)
+      // Create game (starts in placing immediately); link to group if one is selected
       const inviteCode = generateInviteCode();
       const { data: game, error: gameError } = await supabase
         .from("games")
@@ -266,6 +265,7 @@ export default function Home() {
           axis_y_label_high: yHigh.trim(),
           submissions_lock_at: lockAt,
           end_early_when_complete: endEarlyWhenComplete,
+          ...(selectedGroupId && { group_id: selectedGroupId }),
         })
         .select("id")
         .single();

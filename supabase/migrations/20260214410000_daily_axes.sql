@@ -1,5 +1,5 @@
 -- Daily AI-generated axis suggestions (one row per calendar day)
-CREATE TABLE daily_axes (
+CREATE TABLE IF NOT EXISTS daily_axes (
   id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   date        date        UNIQUE NOT NULL DEFAULT CURRENT_DATE,
   axis_x_label_low  text  NOT NULL,
@@ -12,6 +12,7 @@ CREATE TABLE daily_axes (
 -- RLS: anyone authenticated can read, inserts handled via service-role
 ALTER TABLE daily_axes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read daily axes" ON daily_axes;
 CREATE POLICY "Anyone can read daily axes"
   ON daily_axes FOR SELECT
   TO authenticated

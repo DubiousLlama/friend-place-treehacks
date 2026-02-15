@@ -22,6 +22,7 @@ import {
   labelStyleToNormalized,
 } from "@/lib/sizes";
 import { springTransition } from "@/lib/motion";
+import { useAuth } from "@/lib/use-auth";
 import type { Game, GamePlayer, Guess } from "@/lib/game-types";
 
 // ---------------------------------------------------------------------------
@@ -95,9 +96,17 @@ interface SortedPlayer {
 
 export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewProps) {
   const isMobile = useIsMobile();
+  const { isLinked } = useAuth();
   const sizeConfig = isMobile ? MOBILE_SIZES : DESKTOP_SIZES;
   const resultsSizes = isMobile ? MOBILE_RESULTS_SIZES : DESKTOP_RESULTS_SIZES;
   const graphRef = useRef<HTMLDivElement | null>(null);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [groupNameInput, setGroupNameInput] = useState("");
+  const [savingGroup, setSavingGroup] = useState(false);
+  const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
+  const [showDailyPrompt, setShowDailyPrompt] = useState(false);
+  const [dailyGameEnabled, setDailyGameEnabled] = useState(false);
+  const [savingDaily, setSavingDaily] = useState(false);
 
   // ---- Data fetching ----
   const [allGuesses, setAllGuesses] = useState<Guess[]>([]);
@@ -480,6 +489,55 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
   // ---- Breakdown summary ----
   const breakdownPlayer = activeBreakdown ? breakdowns.get(activeBreakdown) : null;
 
+  const handleCreateGroup = useCallback(async () => {
+    const name = groupNameInput.trim() || gamePlayers.map((p) => p.display_name).join(", ");
+    if (!currentPlayerId) return;
+    setSavingGroup(true);
+    const supabase = createClient();
+    const { data: group, error: groupErr } = await supabase
+      .from("saved_groups")
+      .insert({ owner_id: currentPlayerId, name })
+      .select("id")
+      .single();
+    if (groupErr || !group) {
+      setSavingGroup(false);
+      return;
+    }
+    const mySlot = gamePlayers.find((p) => p.player_id === currentPlayerId);
+    await supabase.from("group_members").insert({
+      group_id: group.id,
+      player_id: currentPlayerId,
+      display_name: mySlot?.display_name ?? "Member",
+      is_anonymous: false,
+      sort_order: 0,
+    });
+    let so = 1;
+    for (const gp of gamePlayers) {
+      if (gp.player_id === currentPlayerId) continue;
+      await supabase.from("group_members").insert({
+        group_id: group.id,
+        player_id: gp.player_id ?? null,
+        display_name: gp.display_name,
+        is_anonymous: gp.player_id == null,
+        sort_order: so++,
+      });
+    }
+    setCreatedGroupId(group.id);
+    setSavingGroup(false);
+    setShowCreateGroup(false);
+    setShowDailyPrompt(true);
+  }, [currentPlayerId, gamePlayers, groupNameInput]);
+
+  const handleDailyChoice = useCallback(async (enable: boolean) => {
+    if (!createdGroupId) return;
+    setSavingDaily(true);
+    const supabase = createClient();
+    await supabase.from("saved_groups").update({ daily_game_enabled: enable }).eq("id", createdGroupId);
+    setSavingDaily(false);
+    setShowDailyPrompt(false);
+    setCreatedGroupId(null);
+  }, [createdGroupId]);
+
   // ---- Render ----
 
   const scoreboard = (
@@ -629,6 +687,73 @@ export function ResultsView({ game, gamePlayers, currentPlayerId }: ResultsViewP
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isLinked && (
+        <div className="mt-4 pt-3 border-t border-black/5">
+          <h3 className="font-display font-semibold text-sm text-foreground mb-1">Create a group</h3>
+          <p className="text-xs text-secondary mb-2">Save this crew to start games with one tap later.</p>
+          {!showCreateGroup && !showDailyPrompt && (
+            <button
+              type="button"
+              onClick={() => setShowCreateGroup(true)}
+              className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Create group from this game
+            </button>
+          )}
+          {showCreateGroup && (
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={groupNameInput}
+                onChange={(e) => setGroupNameInput(e.target.value)}
+                placeholder="Group name (or leave blank for member list)"
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateGroup}
+                  disabled={savingGroup}
+                  className="rounded-lg bg-splash text-white px-3 py-2 text-sm font-medium disabled:opacity-50"
+                >
+                  {savingGroup ? "Creating…" : "Create"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateGroup(false); setGroupNameInput(""); }}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {showDailyPrompt && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-foreground">Create a recurring daily game? We&apos;ll send email reminders to members each day to play.</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDailyChoice(true)}
+                  disabled={savingDaily}
+                  className="rounded-lg bg-splash text-white px-3 py-2 text-sm font-medium disabled:opacity-50"
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDailyChoice(false)}
+                  disabled={savingDaily}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  No
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 
