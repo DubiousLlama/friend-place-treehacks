@@ -9,12 +9,14 @@ A daily social game where players place themselves and friends on a 2D graph wit
 - **Place on the graph** — Drag yourself onto the 2D graph, then drag each friend onto the graph. Partial submission allowed; you can return to place more friends later.
 - **Dashboard** — After submitting: see progress (X of N placed), add players, copy invite link, view placement counts for everyone. **Host** can **end game** at any time.
 - **Realtime** — Player list and game phase stay in sync across clients.
+- **AI axis suggestions** — Optional daily axis prefill and “suggest axes” / regenerate one axis (Anthropic Claude). See `docs/ai-setup.md` for API key setup and prompts.
 
-See `docs/components.md` for component architecture and `.cursor/plans/friend_place_game_plan_fd997aac.plan.md` for the full build plan and phase status.
+See `docs/components.md` for component architecture, `docs/security-and-privacy.md` for account login and merge security, `docs/ai-setup.md` for AI (Anthropic) setup and prompts, and `.cursor/plans/friend_place_game_plan_fd997aac.plan.md` for the full build plan and phase status.
 
 ## Getting Started
 
-First, run the development server:
+1. **Environment:** Create `.env.local` in the project root with at least `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. For AI axis suggestions, add `ANTHROPIC_API_KEY` (see `docs/ai-setup.md`).
+2. **Run the dev server:**
 
 ```bash
 npm run dev

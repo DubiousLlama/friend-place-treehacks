@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Outfit, DM_Sans } from "next/font/google";
 import "./globals.css";
+import { AppNav } from "@/components/AppNav";
+import { AuthMergeChecker } from "@/components/AuthMergeChecker";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -29,7 +31,9 @@ export default function RootLayout({
       <body
         className={`${outfit.variable} ${dmSans.variable} antialiased`}
       >
+        <AppNav />
         {children}
+        <AuthMergeChecker />
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { NameSelector } from "@/components/NameSelector";
 import { GameDashboard } from "@/components/GameDashboard";
+import { GameResultsView } from "@/components/GameResultsView";
 import { PlacingPhase } from "@/components/PlacingPhase";
 import { GameInfoPanel } from "@/components/GameInfoPanel";
 import type { Database } from "@/lib/types/database";
@@ -316,11 +317,12 @@ export default function PlayPage() {
   // Game is in results phase
   if (game.phase === "results") {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <p className="text-secondary">
-          Results — scoreboard and placement reveal. (Coming in Phase 5.)
-        </p>
-      </div>
+      <GameResultsView
+        game={game}
+        gamePlayers={gamePlayers}
+        inviteCode={inviteCode}
+        currentPlayerId={currentPlayerId}
+      />
     );
   }
 
