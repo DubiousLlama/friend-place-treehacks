@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeScores } from "@/lib/scoring";
+import type { Database } from "@/lib/types/database";
+
+type Game = Database["public"]["Tables"]["games"]["Row"];
+type GamePlayer = Database["public"]["Tables"]["game_players"]["Row"];
+type Guess = Database["public"]["Tables"]["guesses"]["Row"];
 
 /**
  * POST /api/games/[id]/check-end
@@ -36,7 +41,7 @@ export async function POST(
     .from("games")
     .select("*")
     .eq("id", gameId)
-    .single();
+    .single<Game>();
 
   if (gameErr || !game) {
     return NextResponse.json(
@@ -54,7 +59,8 @@ export async function POST(
   const { data: gamePlayers } = await supabase
     .from("game_players")
     .select("*")
-    .eq("game_id", gameId);
+    .eq("game_id", gameId)
+    .returns<GamePlayer[]>();
 
   if (!gamePlayers || gamePlayers.length === 0) {
     return NextResponse.json({ ended: false, phase: "placing" });
@@ -91,7 +97,8 @@ export async function POST(
   const { data: guesses } = await supabase
     .from("guesses")
     .select("*")
-    .eq("game_id", gameId);
+    .eq("game_id", gameId)
+    .returns<Guess[]>();
 
   // 5. Compute scores
   const scores = computeScores(gamePlayers, guesses ?? []);
