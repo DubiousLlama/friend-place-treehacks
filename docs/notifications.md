@@ -16,6 +16,8 @@ AI-generated reminders (email via Resend by default; optional SMS or browser pus
 - `game_players.results_viewed_at` — set when the play page shows results
 - `notification_log` — one row per (player, game, kind) for deduplication
 
+**Rate limit:** Reminder emails (mid-game nudge + results reminder) are capped at **2 per person per day** (UTC). `_shared/reminder-limit.ts` counts today’s reminder sends per player and skips if already at 2.
+
 ## Edge Functions
 
 - **`notify-game-event`** — Invoked by Database Webhooks on `game_players` (INSERT and UPDATE). Handles new-game-invite and mid-game-nudge when someone submits.

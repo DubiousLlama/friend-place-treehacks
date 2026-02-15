@@ -51,6 +51,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const body = await request.json().catch(() => ({}));
+    const groupInterests = body.groupInterests as string[] | undefined;
+    const hasGroupInterests = Array.isArray(groupInterests) && groupInterests.length > 0;
+
     const deviceKey = getDeviceKey(request);
     let usage: Awaited<ReturnType<typeof getOrCreateDailyUsage>>;
     try {
@@ -73,13 +77,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json().catch(() => ({}));
     const axis = (body.axis as AxisKind) || "horizontal";
     const currentAxes = body.currentAxes as AxisSuggestion | undefined;
     const dailyAxes = body.dailyAxes as AxisSuggestion | undefined;
     const previousPair = body.previousPair as { low: string; high: string } | undefined;
     const pastGameAxes = body.pastGameAxes as string[] | undefined;
-    const groupInterests = body.groupInterests as string[] | undefined;
 
     if (!currentAxes?.x_low || currentAxes.x_high == null || currentAxes.y_low == null || currentAxes.y_high == null) {
       return NextResponse.json(
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
         console.error("[suggest-axes] horizontal response missing fields:", result);
         return json500("Failed to generate horizontal axes", JSON.stringify(result), "parse");
       }
-      await incrementAxesUsed(deviceKey);
+      if (!hasGroupInterests) await incrementAxesUsed(deviceKey);
       return NextResponse.json({ x_low: xLow, x_high: xHigh });
     }
 
@@ -146,7 +148,7 @@ export async function POST(request: NextRequest) {
       console.error("[suggest-axes] vertical response missing fields:", result);
       return json500("Failed to generate vertical axes", JSON.stringify(result), "parse");
     }
-    await incrementAxesUsed(deviceKey);
+    if (!hasGroupInterests) await incrementAxesUsed(deviceKey);
     return NextResponse.json({ y_low: yLow, y_high: yHigh });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
