@@ -137,11 +137,11 @@ export default function PlayPage() {
 
     const deadline = new Date(game.submissions_lock_at);
     if (deadline <= new Date()) {
-      fetch(`/api/games/${game.id}/check-end`, { method: "POST" }).catch(() => {
+      supabase.rpc("check_and_end_game", { p_game_id: game.id }).catch(() => {
         // Non-critical — user can reload
       });
     }
-  }, [game?.id, game?.phase, game?.submissions_lock_at]);
+  }, [game?.id, game?.phase, game?.submissions_lock_at, supabase]);
 
   // Realtime: game phase changes
   useEffect(() => {
@@ -184,6 +184,10 @@ export default function PlayPage() {
       );
       if (!mySlot) return;
 
+      // #region agent log
+      const _dbg = (msg: string, data: Record<string, unknown>) => { fetch('http://127.0.0.1:7242/ingest/51997ba0-9d25-4154-b510-db94c1e13d2e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:submit',message:msg,data,timestamp:Date.now()})}).catch(()=>{}); };
+      // #endregion
+
       // 1. Update self placement
       const { error: selfErr } = await supabase
         .from("game_players")
@@ -196,6 +200,10 @@ export default function PlayPage() {
 
       if (selfErr) console.error("Failed to update self placement:", selfErr);
 
+      // #region agent log
+      _dbg('self_placement_update', { mySlotId: mySlot.id, selfErr: selfErr?.message ?? null, selfPosition });
+      // #endregion
+
       // 2. Delete all existing guesses by this user for this game
       const { error: delErr } = await supabase
         .from("guesses")
@@ -204,6 +212,10 @@ export default function PlayPage() {
         .eq("guesser_game_player_id", mySlot.id);
 
       if (delErr) console.error("Failed to delete old guesses:", delErr);
+
+      // #region agent log
+      _dbg('guesses_delete', { delErr: delErr?.message ?? null });
+      // #endregion
 
       // 3. Re-insert all current guesses (both previously placed + newly placed)
       if (guesses.length > 0) {
@@ -218,13 +230,23 @@ export default function PlayPage() {
         );
 
         if (insErr) console.error("Failed to insert guesses:", insErr);
+
+        // #region agent log
+        _dbg('guesses_insert', { guessCount: guesses.length, insErr: insErr?.message ?? null });
+        // #endregion
       }
 
       // 4. Check if game should end (early-end or time-based)
       try {
-        await fetch(`/api/games/${game.id}/check-end`, { method: "POST" });
-      } catch {
-        // Non-critical — Realtime will catch phase changes
+        const { data: rpcResult, error: rpcErr } = await supabase.rpc("check_and_end_game", { p_game_id: game.id });
+        // #region agent log
+        _dbg('check_end_rpc', { rpcResult, rpcErr: rpcErr?.message ?? null });
+        // #endregion
+        if (rpcErr) console.error("check_and_end_game RPC error:", rpcErr);
+      } catch (checkEndErr) {
+        // #region agent log
+        _dbg('check_end_rpc_failed', { error: String(checkEndErr) });
+        // #endregion
       }
 
       // 5. Refresh data and switch to dashboard
@@ -235,21 +257,20 @@ export default function PlayPage() {
   );
 
   // ---- End game handler: host transitions to results phase ----
-  // Uses the check-end API with force=true so scores are computed.
+  // Uses the check_and_end_game RPC with force=true so scores are computed.
 
   const handleEndGame = useCallback(async () => {
     if (!game || !currentPlayerId) return;
     if (game.created_by !== currentPlayerId) return;
 
     try {
-      const res = await fetch(`/api/games/${game.id}/check-end`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: true }),
+      const { data, error } = await supabase.rpc("check_and_end_game", {
+        p_game_id: game.id,
+        p_force: true,
       });
 
-      if (!res.ok) {
-        console.error("Failed to end game:", await res.text());
+      if (error) {
+        console.error("Failed to end game:", error);
       } else {
         // Realtime subscription will update the game state automatically,
         // but also refresh to be safe
@@ -258,7 +279,7 @@ export default function PlayPage() {
     } catch (err) {
       console.error("Failed to end game:", err);
     }
-  }, [game, currentPlayerId, fetchAll]);
+  }, [game, currentPlayerId, supabase, fetchAll]);
 
   // ---- Edit display name: same slot, update label only ----
 
