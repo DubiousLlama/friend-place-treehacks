@@ -23,7 +23,7 @@ export const PIECEWISE_KINK = 4 / 9;
 /** Bonus points when guess is within this distance of target. */
 export const BEST_FRIEND_BONUS = 50;
 /** Distance threshold for best friend bonus. */
-export const BEST_FRIEND_RADIUS = 0.15;
+export const BEST_FRIEND_RADIUS = 0.12;
 
 /**
  * Fraction of guesser points the target receives: 1 / (numPlayers + 1).
