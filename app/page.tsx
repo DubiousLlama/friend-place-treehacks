@@ -318,9 +318,6 @@ export default function Home() {
     <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 font-sans">
       <main className="w-full max-w-lg flex flex-col items-center gap-8">
         <div className="flex flex-col gap-3 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-black">
-            Friend Place
-          </h1>
           <p className="text-secondary">
             Place yourself on the chart, then guess where your friends placed themselves.
             Share the link and see who knows each other best.
