@@ -16,6 +16,7 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
@@ -65,7 +66,7 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
         setLoading(false);
         return;
       }
-      const { error } = await supabase.auth.signUp({
+      const { data: signUpData, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: password.trim(),
         options: { emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback` },
@@ -74,6 +75,14 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
         setMessage({ type: "error", text: error.message });
         setLoading(false);
         return;
+      }
+      if (signUpData?.user?.id && phone.trim()) {
+        await supabase
+          .from("players")
+          .upsert(
+            { id: signUpData.user.id, phone: phone.trim() },
+            { onConflict: "id" }
+          );
       }
       setMessage({
         type: "success",
@@ -151,15 +160,24 @@ export function AuthModal({ onClose, onSuccess, isLinking }: AuthModalProps) {
             required
           />
           {mode === "signup" && (
-            <input
-              type="password"
-              placeholder="Confirm password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-secondary"
-              autoComplete="new-password"
-              required
-            />
+            <>
+              <input
+                type="password"
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-secondary"
+                autoComplete="new-password"
+                required
+              />
+              <input
+                type="tel"
+                placeholder="Phone (optional, for game reminders)"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-secondary"
+              />
+            </>
           )}
           {message && (
             <p

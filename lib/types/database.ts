@@ -26,6 +26,8 @@ export type Database = {
           created_at: string;
           linked_at: string | null;
           onboarding_plays_seen: number;
+          phone: string | null;
+          notifications_enabled: boolean;
         };
         Insert: {
           id: string;
@@ -33,6 +35,8 @@ export type Database = {
           created_at?: string;
           linked_at?: string | null;
           onboarding_plays_seen?: number;
+          phone?: string | null;
+          notifications_enabled?: boolean;
         };
         Update: {
           id?: string;
@@ -40,6 +44,8 @@ export type Database = {
           created_at?: string;
           linked_at?: string | null;
           onboarding_plays_seen?: number;
+          phone?: string | null;
+          notifications_enabled?: boolean;
         };
         Relationships: [];
       };
@@ -105,6 +111,7 @@ export type Database = {
           score: number | null;
           claimed_at: string | null;
           guesses_count: number;
+          results_viewed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -117,6 +124,7 @@ export type Database = {
           score?: number | null;
           claimed_at?: string | null;
           guesses_count?: number;
+          results_viewed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -129,6 +137,7 @@ export type Database = {
           score?: number | null;
           claimed_at?: string | null;
           guesses_count?: number;
+          results_viewed_at?: string | null;
         };
         Relationships: [
           {
@@ -280,6 +289,51 @@ export type Database = {
             columns: ["group_id"];
             isOneToOne: false;
             referencedRelation: "saved_groups";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notification_log: {
+        Row: {
+          id: string;
+          player_id: string;
+          game_id: string | null;
+          kind: string;
+          channel: string;
+          sent_at: string;
+          message: string | null;
+        };
+        Insert: {
+          id?: string;
+          player_id: string;
+          game_id?: string | null;
+          kind: string;
+          channel: string;
+          sent_at?: string;
+          message?: string | null;
+        };
+        Update: {
+          id?: string;
+          player_id?: string;
+          game_id?: string | null;
+          kind?: string;
+          channel?: string;
+          sent_at?: string;
+          message?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_log_player_id_fkey";
+            columns: ["player_id"];
+            isOneToOne: false;
+            referencedRelation: "players";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notification_log_game_id_fkey";
+            columns: ["game_id"];
+            isOneToOne: false;
+            referencedRelation: "games";
             referencedColumns: ["id"];
           },
         ];

@@ -83,6 +83,16 @@ export default function PlayPage() {
     }
   }, [onboardingCount, isLinked]);
 
+  // Mark results as viewed when showing results (stops results-reminder notifications)
+  useEffect(() => {
+    if (!game || game.phase !== "results" || !mySlot?.id || mySlot.results_viewed_at != null) return;
+    supabase
+      .from("game_players")
+      .update({ results_viewed_at: new Date().toISOString() })
+      .eq("id", mySlot.id)
+      .then(() => {});
+  }, [game?.id, game?.phase, mySlot?.id, mySlot?.results_viewed_at]);
+
   const fetchAll = useCallback(async () => {
     // Ensure session
     let {

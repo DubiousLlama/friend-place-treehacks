@@ -47,11 +47,14 @@ export default function ProfilePage() {
   const { user, loading: authLoading, isLinked } = useAuth();
   const router = useRouter();
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string>("");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [consensusHighlights, setConsensusHighlights] = useState<ConsensusResult[]>([]);
   const [scoreHistory, setScoreHistory] = useState<GameRankEntry[]>([]);
   const [gamesCount, setGamesCount] = useState(0);
   const [bestRank, setBestRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [savingNotifications, setSavingNotifications] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -65,10 +68,12 @@ export default function ProfilePage() {
 
       const { data: player } = await supabase
         .from("players")
-        .select("display_name")
+        .select("display_name, phone, notifications_enabled")
         .eq("id", user.id)
         .single();
       setDisplayName(player?.display_name ?? null);
+      setPhone(player?.phone ?? "");
+      setNotificationsEnabled(player?.notifications_enabled ?? true);
 
       const { data: mySlots } = await supabase
         .from("game_players")
@@ -185,6 +190,56 @@ export default function ProfilePage() {
       <p className="mt-1 text-sm text-secondary">
         {displayName ?? user?.email ?? "Signed in"}
       </p>
+
+      <section className="mt-6">
+        <h2 className="font-display text-lg font-semibold text-foreground">
+          Notifications
+        </h2>
+        <p className="mt-1 text-sm text-secondary">
+          Optional phone number for game reminders (e.g. when you’re added to a game or results are ready).
+        </p>
+        <div className="mt-3 space-y-3">
+          <input
+            type="tel"
+            placeholder="Phone (optional, E.164)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            onBlur={async () => {
+              if (!user?.id || savingNotifications) return;
+              setSavingNotifications(true);
+              await createClient()
+                .from("players")
+                .update({
+                  phone: phone.trim() || null,
+                  notifications_enabled: notificationsEnabled,
+                })
+                .eq("id", user.id);
+              setSavingNotifications(false);
+            }}
+            className="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-secondary"
+          />
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={notificationsEnabled}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setNotificationsEnabled(v);
+                if (user?.id && !savingNotifications) {
+                  setSavingNotifications(true);
+                  createClient()
+                    .from("players")
+                    .update({ notifications_enabled: v })
+                    .eq("id", user.id)
+                    .then(() => setSavingNotifications(false));
+                }
+              }}
+              className="rounded border-border"
+            />
+            Send game reminders
+          </label>
+        </div>
+      </section>
 
       {loading ? (
         <p className="mt-8 text-secondary">Loading...</p>
