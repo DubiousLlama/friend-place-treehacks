@@ -572,7 +572,9 @@ export function CreateGameForm({ initialGroupId, initialDailyAxes }: CreateGameF
           <div className="mt-4 flex flex-col gap-4">
             <div className="flex flex-col gap-4 min-w-0">
               <p className="text-sm text-secondary">
-                {loadingAxes ? "Loading today's axes..." : "Today's axes – edit or use the reload next to each axis."}
+                {loadingAxes
+                  ? (selectedGroupId ? "Generating axes for this game…" : "Loading today's axes…")
+                  : (selectedGroupId ? "Axes for this game – edit or use the reload next to each axis." : "Today's axes – edit or use the reload next to each axis.")}
               </p>
               <fieldset className="flex flex-col gap-2 min-w-0">
                 <div className="flex items-center gap-2">

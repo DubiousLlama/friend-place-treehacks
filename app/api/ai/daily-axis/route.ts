@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient();
 
-    // Group path: use interests to generate axes (no global cache)
+    // Group path: always generate new axes for this game (never use global daily cache)
     if (groupId) {
       const { data: group, error: groupError } = await supabase
         .from("saved_groups")
@@ -49,11 +49,12 @@ export async function GET(request: NextRequest) {
         .eq("id", groupId)
         .maybeSingle();
 
+      if (!isAIAvailable()) {
+        const fb = randomFallback();
+        return NextResponse.json({ ...fb, source: "fallback" });
+      }
+
       if (!groupError && group?.interests?.length) {
-        if (!isAIAvailable()) {
-          const fb = randomFallback();
-          return NextResponse.json({ ...fb, source: "fallback" });
-        }
         const raw = await generateText(
           AXIS_SYSTEM_PROMPT,
           buildGroupAxesPrompt({ groupInterests: group.interests }),
@@ -62,10 +63,18 @@ export async function GET(request: NextRequest) {
         if (result?.x_low && result.x_high && result.y_low && result.y_high) {
           return NextResponse.json({ ...result, source: "group" });
         }
-        const fb = randomFallback();
-        return NextResponse.json({ ...fb, source: "fallback" });
       }
-      // No interests or group not found: fall through to global daily axis
+      // No interests or group not found: still generate fresh axes (not global daily)
+      const raw = await generateText(
+        AXIS_SYSTEM_PROMPT,
+        buildDailyAxisPrompt(),
+      );
+      const result = raw ? parseAxisLines(raw, "full") : null;
+      if (result?.x_low && result.x_high && result.y_low && result.y_high) {
+        return NextResponse.json({ ...result, source: "group" });
+      }
+      const fb = randomFallback();
+      return NextResponse.json({ ...fb, source: "fallback" });
     }
 
     // Check if today's axis already exists (use maybeSingle so 0 rows is not an error)
